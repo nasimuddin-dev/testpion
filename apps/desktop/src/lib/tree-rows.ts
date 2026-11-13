@@ -14,9 +14,12 @@ import { interleave, type CollectionCallLibrary, type KindId } from '@testpion/s
  * `scopedNodeId(collectionId, nodeId)` = `<collection id>:<node id>`.
  */
 
-/** Saved items of a collection that aren't collection requests (gRPC calls, WebSocket connections). */
+/** What a collection shows that is kept outside its file: the two call libraries, and the MCP servers placed in it (mcp-servers.json). */
+export type PlacedKind = CollectionCallLibrary | 'mcp';
+
+/** Saved items of a collection that aren't collection requests (gRPC calls, WebSocket connections, MCP servers). */
 export interface ExtraGroup {
-  cat: CollectionCallLibrary;
+  cat: PlacedKind;
   /** The item kind of its items (grpc-call, ws-connection): `collectionCallKind(cat)`. */
   kind: KindId;
   /** `folderId` / `after`: its place among the collection's requests (core storage/collection-calls.ts); `folder`: the folder text of an older version. */

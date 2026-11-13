@@ -68,8 +68,9 @@ export function McpView() {
     void load();
     return on<Array<{ serverId: string; event: McpEvent }>>('mcp.events', (items) => setEvents((ev) => mergeEventBatch(ev, items)));
   }, [load]);
-  const addServer = (folder?: string) => {
-    setDraft({ id: uid('mcp-'), name: NEW_TAB_TITLE.mcp, transport: 'stdio', command: 'node', args: [], ...(folder ? { folder } : {}) });
+  /** `place`: New MCP server of a collection or one of its folders, where the new server is shown as well. */
+  const addServer = (folder?: string, place?: { collectionId: string; folderId?: string }) => {
+    setDraft({ id: uid('mcp-'), name: NEW_TAB_TITLE.mcp, transport: 'stdio', command: 'node', args: [], ...(folder ? { folder } : {}), ...(place ?? {}) });
     setTab('settings');
   };
   const selectServer = (id: string) => {
@@ -78,7 +79,7 @@ export function McpView() {
   };
   useIntent('mcp', (p) => {
     if (p?.serverId) selectServer(p.serverId);
-    if (p?.addServer) addServer();
+    if (p?.addServer) addServer(undefined, typeof p.collectionId === 'string' ? { collectionId: p.collectionId, ...(typeof p.folderId === 'string' ? { folderId: p.folderId } : {}) } : undefined);
     if (p?.tab) setTab(p.tab as Tab);
     if (p?.serverId && p.connect) void connect(p.serverId as string);
     if (p?.serverId && p.call && typeof p.call.tool === 'string') {

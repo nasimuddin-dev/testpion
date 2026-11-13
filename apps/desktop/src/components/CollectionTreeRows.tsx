@@ -275,6 +275,8 @@ export const ExtraItemRow = memo(function ExtraItemRow({
   const kind = g.kind;
   const rn = () => g.rename?.(i.id);
   const dropOf = () => x().dropProps(c, id, 'before', { beforeId: i.id });
+  // an MCP server placed in the collection is named as everywhere else (its own ref, the MCP badge)
+  const ref = g.cat === 'mcp' ? ({ kind: 'mcp-server', serverId: i.id } as const) : ({ kind: 'saved', library: g.cat, itemId: i.id } as const);
   return (
     <TreeRowShell
       kind={kind}
@@ -287,15 +289,15 @@ export const ExtraItemRow = memo(function ExtraItemRow({
       onClick={() => g.onOpen(i.id)}
       onOpen={() => g.onOpen(i.id)}
       rename={renaming ? { value: i.name, done: (name) => rn()?.done(name) } : undefined}
-      drag={[{ kind: 'saved', library: g.cat, itemId: i.id }]}
+      drag={[ref]}
       // a saved item dragged onto another collection moves there (CollectionTree's collectionDrop reads this)
       onDragStart={(e) => e.dataTransfer.setData(SAVED_ITEM_MIME, JSON.stringify({ kind: g.cat, id: i.id, from }))}
       onDragEnd={() => x().savedDragEnd()}
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth, 16)}
-      git={savedItemRef(g.cat, i.id)}
+      git={g.cat === 'mcp' ? ref : savedItemRef(g.cat, i.id)}
     >
-      <TreeBadge label={i.badge ?? CATEGORY_META[g.cat].badge} className={CATEGORY_META[g.cat].cls} />
+      <TreeBadge label={i.badge ?? (g.cat === 'mcp' ? 'MCP' : CATEGORY_META[g.cat].badge)} className={g.cat === 'mcp' ? KIND_COLOR.mcp : CATEGORY_META[g.cat].cls} />
       <span className="truncate">{i.name}</span>
     </TreeRowShell>
   );

@@ -202,7 +202,7 @@ describe('every drag has a menu equivalent', () => {
     expect(read('apps/desktop/src/components/CollectionTree.tsx')).toMatch(/move: \(\) => setMoving\(\{ c, n \}\)/);
     expect(read('apps/desktop/src/components/FolderList.tsx')).toMatch(/move: moveToFolderItem/);
     // (the menu of a gRPC call or connection: the one owner of those lists, for every tree of collections)
-    expect(read('apps/desktop/src/lib/use-collection-calls.ts')).toMatch(/move: collections\.map/);
+    expect(read('apps/desktop/src/lib/use-collection-calls.ts')).toMatch(/move: moveTargets\(kind, item\)/);
   });
 });
 

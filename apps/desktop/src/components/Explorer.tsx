@@ -552,7 +552,8 @@ export function Explorer() {
   };
 
   // any kind of request in any folder: a gRPC call or connection is saved into the folder it was created in
-  const newOfCategory = (c: Collection, cat: RequestCategory, folderId?: string, mode?: string) => {
+  const newOfCategory = (c: Collection, cat: RequestCategory | 'mcp', folderId?: string, mode?: string) => {
+    if (cat === 'mcp') return intent('mcp', { addServer: true, collectionId: c.id, ...(folderId ? { folderId } : {}) });
     if (isCollectionCallLibrary(cat)) return intent(cat, { newDoc: true, collectionId: c.id, ...(folderId ? { folderId } : {}), ...(mode ? { mode } : {}) });
     const node = newNode(cat)!;
     void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, folderId, node) })).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: cat === 'graphql' ? 'graphql' : 'http' }));

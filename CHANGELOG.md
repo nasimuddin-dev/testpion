@@ -11,6 +11,7 @@
 
 - **Dragging a request or a folder onto another folder works again.** A drop with the mouse moved nothing: the tree forgot what was being dragged just before the drop was handled.
 - A folder's and a collection's **New request ▸** now lists **Socket.IO**, **MQTT** and **Kafka** by name, next to HTTP, GraphQL, SOAP, gRPC and WebSocket; the new tab starts as that kind and is saved in that folder.
+- **An MCP server in a collection folder.** *New request ▸ New MCP server* on a folder or a collection adds a server there, next to the requests it belongs with; drag it to another folder or use *Move to folder*. It stays in the list of MCP servers, and *Move to folder ▸ Out of the collection* takes it out again without deleting it.
 
 ### Simulated users
 

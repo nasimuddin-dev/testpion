@@ -29,7 +29,7 @@ import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
 import { openExportBundle } from '../lib/transfer';
 import { deferDrop, useDragSession } from '../lib/drag-ref';
-import { buildTreeRows, callShown, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
+import { buildTreeRows, callShown, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type PlacedKind, type TreeRow } from '../lib/tree-rows';
 import { CATEGORY_META, CollectionRow, EmptyRow, ExampleRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
 import { useOpenRequestId } from './open-request-id';
 import { pickRequest, type Picked } from '../lib/picked-requests';
@@ -48,7 +48,7 @@ export type ConnectionMode = 'websocket' | 'socketio' | 'mqtt' | 'kafka';
  * Every other kind of request a collection or a folder can get (New request ▸), named as its new tab is
  * (NEW_TAB_TITLE). WebSocket, Socket.IO, MQTT and Kafka share one editor and each has its own entry.
  */
-const OTHER_KINDS: ReadonlyArray<{ cat: Exclude<RequestCategory, 'rest'>; mode?: ConnectionMode; label: string }> = [
+const OTHER_KINDS: ReadonlyArray<{ cat: Exclude<RequestCategory, 'rest'> | 'mcp'; mode?: ConnectionMode; label: string }> = [
   { cat: 'graphql', label: newRequestOf('graphql') },
   { cat: 'soap', label: newRequestOf('soap') },
   { cat: 'grpc', label: newRequestOf('grpc') },
@@ -56,6 +56,8 @@ const OTHER_KINDS: ReadonlyArray<{ cat: Exclude<RequestCategory, 'rest'>; mode?:
   { cat: 'websocket', mode: 'socketio', label: 'New Socket.IO request' },
   { cat: 'websocket', mode: 'mqtt', label: 'New MQTT request' },
   { cat: 'websocket', mode: 'kafka', label: 'New Kafka connection' },
+  // an MCP server is kept in the workspace's server list; made here, it is placed in this collection or folder as well
+  { cat: 'mcp', label: 'New MCP server' },
 ];
 
 /** Per collection: sent requests and how many are failing now; refreshed after requests and runs (debounced). */
@@ -156,12 +158,12 @@ export const CollectionTree = memo(function CollectionTree({
   /** The saved gRPC call or connection being renamed in place (its id): the owner of the lists keeps that state. */
   extraRenaming?: string;
   /** Create a request of this kind in a collection or one of its folders (New request ▸ in their menus). */
-  onNewOfCategory?(c: Collection, cat: RequestCategory, folderId?: string, mode?: ConnectionMode): void;
+  onNewOfCategory?(c: Collection, cat: RequestCategory | 'mcp', folderId?: string, mode?: ConnectionMode): void;
   /**
    * A saved gRPC call or connection was dropped on a collection, on a folder, or before a request or another call
    * (`after`: the sibling it follows now; `others`: the calls around it that follow something else now).
    */
-  onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string, place?: { folderId?: string; after?: string; others?: ReadonlyMap<string, string> }): void | Promise<unknown>;
+  onDropSaved?(kind: PlacedKind, id: string, collectionId: string, place?: { folderId?: string; after?: string; others?: ReadonlyMap<string, string> }): void | Promise<unknown>;
   /**
    * Calls follow another sibling now (call id → what it follows): the request or folder they followed was deleted or
    * moved away, or one was dropped among them. The answer puts them back as they were (Undo).
@@ -369,7 +371,7 @@ export const CollectionTree = memo(function CollectionTree({
         e.stopPropagation();
         setDropAt(undefined);
         try {
-          const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string; from?: string };
+          const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: PlacedKind; id: string; from?: string };
           deferDrop(() => void onDropSaved!(d.kind, d.id, c.id, {}));
         } catch {
           /* not ours */
@@ -406,7 +408,7 @@ export const CollectionTree = memo(function CollectionTree({
       if (isSavedDrag(e)) {
         setDropAt(undefined);
         try {
-          const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string };
+          const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: PlacedKind; id: string };
           if (d.id !== place.beforeId) deferDrop(() => void onDropSaved!(d.kind, d.id, c.id, savedPlace(c, place, d.id)));
         } catch {
           /* not ours */
@@ -559,7 +561,7 @@ export const CollectionTree = memo(function CollectionTree({
       ref,
       name: n.name,
       repo: canHistory,
-      // any kind of request in any folder: New request ▸ GraphQL, SOAP, gRPC, WebSocket, Socket.IO, MQTT, Kafka into this folder
+      // any kind of request in any folder: New request ▸ GraphQL, SOAP, gRPC, WebSocket, Socket.IO, MQTT, Kafka, MCP server into this folder
       create: [
         { label: newRequestLabel ?? 'New HTTP request', icon: <FilePlus2 size={14} />, onSelect: () => newRequest(c, n.id) },
         ...(onNewOfCategory ? [{ label: LABEL.newRequest, icon: <FilePlus2 size={14} />, onSelect: () => undefined, items: OTHER_KINDS.map((k) => ({ label: k.label, icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, k.cat, n.id, k.mode) })) }] : []),
