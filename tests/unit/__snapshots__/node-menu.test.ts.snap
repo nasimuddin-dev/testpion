@@ -13,6 +13,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Copy path",
       "Export…",
     ],
+    [
+      "Delete…",
+    ],
   ],
   "certificate": [
     [
@@ -73,6 +76,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
       "Use in a test",
     ],
     [
@@ -112,6 +116,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
+    ],
+    [
       "Git",
     ],
     [
@@ -139,6 +146,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Monitor on a schedule…",
       "Run in CI…",
+      "Uses and used by…",
     ],
     [
       "Git",
@@ -192,6 +200,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Rename",
       "Duplicate",
+      "Move to…",
     ],
     [
       "Delete…",
@@ -365,6 +374,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Collapse all",
     ],
     [
+      "Export…",
+    ],
+    [
       "Rename folder",
     ],
     [
@@ -448,6 +460,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Save as test…",
+      "Uses and used by…",
     ],
     [
       "Git",
@@ -490,6 +503,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
+    ],
+    [
       "Git",
     ],
     [
@@ -504,6 +520,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "mcp-mock": [
     [
       "Export…",
+    ],
+    [
+      "Uses and used by…",
     ],
     [
       "Git",
@@ -524,6 +543,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
       "Settings…",
     ],
     [
@@ -541,6 +561,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "metric": [
     [
       "Export…",
+    ],
+    [
+      "Uses and used by…",
     ],
     [
       "Delete…",
@@ -570,6 +593,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
+    ],
+    [
       "Git",
     ],
     [
@@ -591,6 +617,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
+    ],
+    [
       "Git",
     ],
     [
@@ -608,6 +637,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
+    ],
+    [
       "Git",
     ],
   ],
@@ -620,6 +652,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
       "Settings…",
     ],
     [
@@ -638,6 +671,10 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Copy link",
+      "Export…",
+    ],
+    [
+      "Uses and used by…",
     ],
     [
       "Git",
@@ -664,6 +701,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Monitor on a schedule…",
       "Save as test…",
+      "Uses and used by…",
       "Suggest checks with AI…",
     ],
     [
@@ -703,6 +741,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   "script-package": [
     [
       "Export…",
+    ],
+    [
+      "Uses and used by…",
     ],
     [
       "Git",
@@ -849,10 +890,14 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "New …",
       "New folder…",
+      "Import…",
     ],
     [
       "Expand all",
       "Collapse all",
+    ],
+    [
+      "Export…",
     ],
   ],
   "section:spec": [
@@ -904,9 +949,10 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
       "Export…",
     ],
     [
+      "Uses and used by…",
+      "AI ▸",
       "Generate tests…",
       "Generate integration flows…",
-      "AI ▸",
     ],
     [
       "Git",
@@ -948,6 +994,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     [
       "Rename",
       "Duplicate",
+      "Move to…",
     ],
     [
       "Delete…",
@@ -1004,6 +1051,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Save as test…",
+      "Uses and used by…",
     ],
     [
       "Git",

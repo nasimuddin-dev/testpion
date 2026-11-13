@@ -1,5 +1,5 @@
 import type { ItemRef } from '@testpion/shared';
-import { restoreFromTrash, trashMcpServer } from '../storage/trash.js';
+import { restoreFromTrash, trashMcpServer, trashProvider } from '../storage/trash.js';
 import { fileListIndex, missing, ok } from './ref-index.js';
 import type { KindDefs } from './types.js';
 
@@ -19,5 +19,6 @@ export const itemsInFileKinds: KindDefs = {
       const p = fileListIndex(store, 'providers.json', 'providers')?.byId.get(r.providerId);
       return p ? ok(r, p.name, 'AI provider') : missing(r, 'That AI provider is no longer set up.', { label: 'Open AI providers', view: 'ai' });
     },
+    ops: { remove: (store, id) => trashProvider(store, id), restore: (store, trashId) => restoreFromTrash(store, trashId) },
   },
 };

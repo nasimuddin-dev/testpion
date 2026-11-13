@@ -797,7 +797,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "soap": "rest",
     "websocket": "websocket",
   },
-  "trash": "collections, environments, datasets, API definitions and MCP servers",
+  "trash": "collections, gRPC calls, connections, environments, test files, flows, datasets, API definitions, MCP servers, AI providers, prompts, load tests, evaluations, monitors and RAG targets",
 }
 `;
 

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { ApsError } from '../errors.js';
-import type { LibraryItem, McpServerConfig } from '../model/types.js';
+import type { LibraryItem, McpServerConfig, ProviderConfig } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
 import { readJson, removeOwned, renameOwned, writeJson } from './fsutil.js';
@@ -9,7 +9,9 @@ import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
 import { KIND_INFO, kindsWith, type KindId } from '@testpion/shared';
 
 /**
- * Recently deleted collections, environments, datasets, API definitions (specs/) and MCP servers. Deleting moves the
+ * Recently deleted collections, environments, datasets, API definitions (specs/), test files and flows (tests/), MCP
+ * servers, AI providers and the saved items of the libraries (gRPC calls, connections, prompts, load tests, evaluations,
+ * monitors, RAG targets). Deleting moves the
  * item to the workspace's `trash/` folder (never committed: it holds its own `.gitignore`), from where it can be
  * restored for 30 days. Secret values stay in the secret store, so a restored environment still has them. An MCP
  * server keeps its id and its place in the list; an API definition its path.
@@ -22,7 +24,8 @@ import { KIND_INFO, kindsWith, type KindId } from '@testpion/shared';
  * calls are still in the libraries, hidden, and are handled as before (re-pointed on restore, deleted on purge).
  */
 /** The kinds whose `trash` capability is true in the item-kind registry (each needs a KindDef below). */
-type TrashKind = Extract<KindId, 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server'>;
+type LibraryTrashKind = Extract<KindId, 'grpc-call' | 'ws-connection' | 'prompt' | 'load-test' | 'evaluation' | 'monitor' | 'rag-target'>;
+type TrashKind = Extract<KindId, 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server' | 'test' | 'flow' | 'provider'> | LibraryTrashKind;
 export const TRASH_DAYS = 30;
 
 export interface TrashItem {
@@ -165,7 +168,7 @@ function putBackCalls(store: WorkspaceStore, calls: TrashedCalls, collectionId: 
   }
 }
 
-/** A spec's path inside specs/ as one file name (`asyncapi/x.yaml` → `asyncapi%2Fx.yaml`), and back (never out of specs/). */
+/** A spec's path inside specs/ as one file name (`asyncapi/x.yaml` → `asyncapi%2Fx.yaml`), and back (never out of specs/). A test file's path inside tests/ the same way. */
 const specEntryName = (rel: string) => encodeURIComponent(rel.replace(/^specs\//, ''));
 function specRelOf(name: string): string {
   let rel = '';
@@ -177,6 +180,40 @@ function specRelOf(name: string): string {
   if (!rel || rel.split('/').some((n) => n === '..' || n === '' || n.includes('\\')) || /^[a-z]:/i.test(rel)) throw new ApsError('ValidationError', `Not a trash entry: ${name}`, { suggestions: [] });
   return rel;
 }
+
+/** A test file or a flow keeps its path under tests/ (smoke/login.yaml), encoded as one file name. */
+const testFileKind = (label: string): KindDef => ({
+  label,
+  entry: /^(.+)$/,
+  describe: (_s, path, name) => ({ itemId: specRelOf(name), name: specRelOf(name), size: statSync(path).size }),
+  restore: (store, path, name) => {
+    const dest = restoreFile(path, store.path('tests'), specRelOf(name));
+    const rel = dest.slice(store.path('tests').length + 1).split(/[\\/]/).join('/');
+    return { id: rel, name: rel };
+  },
+});
+
+/** A saved item of a library: the item and its place in the list. It goes back there, in its folder when that is still one. */
+const libraryKind = (kind: LibraryTrashKind, label: string): KindDef => ({
+  label,
+  entry: /^(.+)\.json$/,
+  describe: (_s, path, name) => {
+    const { item } = readJson<{ item: LibraryItem }>(path);
+    return { itemId: String(item?.id ?? name), name: String(item?.name ?? name), size: 0 };
+  },
+  restore: (store, path) => {
+    const { item, position } = readJson<{ item: LibraryItem; position?: number }>(path);
+    const library = KIND_INFO[kind].library!;
+    const lib = store.getLibrary<unknown>(library);
+    const list = lib.items as LibraryItem[];
+    const back = unclash(item, list);
+    const placed = back.folder && !lib.folders.includes(back.folder) ? { ...back, folder: undefined } : back;
+    const at = Math.max(0, Math.min(Number.isInteger(position) ? position! : list.length, list.length));
+    store.saveLibrary(library, { folders: lib.folders, items: [...list.slice(0, at), placed, ...list.slice(at)] });
+    rmSync(path, { force: true });
+    return { id: placed.id, name: placed.name };
+  },
+});
 
 const KINDS: Record<TrashKind, KindDef> = {
   collection: {
@@ -263,6 +300,33 @@ const KINDS: Record<TrashKind, KindDef> = {
       return { id: item.id, name: item.name };
     },
   },
+  test: testFileKind('test files'),
+  flow: testFileKind('flows'),
+  // an AI provider: its settings and its place in the list (its API key stays in the secret store, under its id)
+  provider: {
+    label: 'AI providers',
+    entry: /^(.+)\.json$/,
+    describe: (_s, path, name) => {
+      const { provider } = readJson<{ provider: ProviderConfig }>(path);
+      return { itemId: String(provider?.id ?? name), name: String(provider?.name ?? name), size: 0 };
+    },
+    restore: (store, path) => {
+      const { provider, position } = readJson<{ provider: ProviderConfig; position?: number }>(path);
+      const list = store.getProviders();
+      const item = unclash(provider, list);
+      const at = Math.max(0, Math.min(Number.isInteger(position) ? position! : list.length, list.length));
+      store.saveProviders([...list.slice(0, at), item, ...list.slice(at)]);
+      rmSync(path, { force: true });
+      return { id: item.id, name: item.name };
+    },
+  },
+  'grpc-call': libraryKind('grpc-call', 'gRPC calls'),
+  'ws-connection': libraryKind('ws-connection', 'connections'),
+  prompt: libraryKind('prompt', 'prompts'),
+  'load-test': libraryKind('load-test', 'load tests'),
+  evaluation: libraryKind('evaluation', 'evaluations'),
+  monitor: libraryKind('monitor', 'monitors'),
+  'rag-target': libraryKind('rag-target', 'RAG targets'),
 };
 
 /** The registry's kinds with the `trash` capability, in its order; each one must have its KindDef here. */
@@ -279,7 +343,8 @@ const ENTRY_ID = new RegExp(`^(${TRASH_KINDS.join('|')})\\/(\\d+--[^/\\\\]+)$`);
 /** Where a kind's entries live under trash/: the kind's storage folder (collections/, datasets/ …), or its file's name for a kind kept as a list in one file (mcp-servers). */
 function trashDirOf(kind: TrashKind): string {
   const s = KIND_INFO[kind].storage;
-  return 'dir' in s ? s.dir : 'file' in s ? s.file.replace(/\.json$/, '') : kind;
+  // (a flow is a test file: both live in tests/, so its entries get a folder of their own)
+  return KIND_INFO[kind].variantOf ? kind : 'dir' in s ? s.dir : 'file' in s ? s.file.replace(/\.json$/, '') : kind;
 }
 
 const trashDir = (store: WorkspaceStore, kind?: TrashKind) => (kind ? store.path('trash', trashDirOf(kind)) : store.path('trash'));
@@ -316,6 +381,42 @@ export function trashSpec(store: WorkspaceStore, rel: string): string {
   const id = moveToTrash(store, 'spec', file, specEntryName(path));
   if (!id) throw new ApsError('ConfigurationError', `No API definition ${rel}`, { suggestions: [] });
   return id;
+}
+
+/** Delete a test file or a flow (`smoke/login.yaml`, a path inside tests/) to the trash; the entry id. A folder is not an item: its files are deleted one by one. */
+export function trashTestFile(store: WorkspaceStore, kind: 'test' | 'flow', rel: string): string {
+  const path = rel.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^tests\//, '');
+  const file = path ? store.safePath(path, store.path('tests')) : '';
+  if (!file || !existsSync(file) || !statSync(file).isFile()) throw new ApsError('ValidationError', `No test file tests/${path}`, { suggestions: [] });
+  return moveToTrash(store, kind, file, encodeURIComponent(path))!;
+}
+
+/** Delete a saved item of a library (a gRPC call, a prompt, a monitor …) to the trash: the item and its place in the list; the entry id. */
+export function trashLibraryItem(store: WorkspaceStore, kind: LibraryTrashKind, itemId: string): string {
+  const library = KIND_INFO[kind].library!;
+  const lib = store.getLibrary<unknown>(library);
+  const list = lib.items as LibraryItem[];
+  const position = list.findIndex((i) => i.id === itemId);
+  if (position < 0) throw new ApsError('ValidationError', `No ${KIND_INFO[kind].label.toLowerCase()} ${itemId}`, { suggestions: [] });
+  const dir = ensureTrashDir(store, kind);
+  let at = Date.now();
+  const slug = slugify(itemId) || 'item';
+  while (existsSync(join(dir, `${at}--${slug}.json`))) at++;
+  // the entry first, then the library without it: a failure in between never loses the item
+  writeJson(join(dir, `${at}--${slug}.json`), { item: list[position], position });
+  store.saveLibrary(library, { folders: lib.folders, items: list.filter((i) => i.id !== itemId) });
+  return `${kind}/${at}--${slug}.json`;
+}
+
+/** Delete an AI provider to the trash (its settings and place in the list; its API key stays in the secret store); the entry id. */
+export function trashProvider(store: WorkspaceStore, providerId: string): string {
+  const list = store.getProviders();
+  const position = list.findIndex((p) => p.id === providerId);
+  if (position < 0) throw new ApsError('ConfigurationError', `Unknown AI provider ${providerId}`, { suggestions: [] });
+  const name = `${Date.now()}--${slugify(providerId) || 'provider'}.json`;
+  writeJson(join(ensureTrashDir(store, 'provider'), name), { provider: list[position], position });
+  store.saveProviders(list.filter((p) => p.id !== providerId));
+  return `provider/${name}`;
 }
 
 /** Delete an MCP server to the trash (its config and place in the list); the entry id and the server. */

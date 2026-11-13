@@ -1,7 +1,14 @@
 /** RPC handlers: the item-kind registry, and what node menus do to the files of a kind (REG-5, MENU-2). */
-import { ApsError, describeKinds, folderOfWorkspaceFile, removeItem, renameSpecFile, duplicateSpecFile, restoreItem } from '@testpion/core';
-import { KIND_INFO } from '@testpion/shared';
+import { ApsError, describeKinds, folderOfWorkspaceFile, itemUses, removeItem, renameSpecFile, duplicateSpecFile, restoreItem } from '@testpion/core';
+import { KIND_INFO, type KindId } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
+
+/** An item of a kind left or came back: the views that list the kind reload (a library's list by its file). */
+export function itemChanged(be: Backend, kind: KindId): void {
+  const info = KIND_INFO[kind];
+  if (!info || info.watch === 'none') return;
+  be.host.emit('data.changed', { kind: info.watch.legacy, ...(info.library ? { paths: [`library/${info.library}.json`] } : {}) });
+}
 
 export function kindHandlers(be: Backend): Handlers {
   return {
@@ -17,12 +24,17 @@ export function kindHandlers(be: Backend): Handlers {
      */
     'item.remove': ({ ref }: { ref: unknown }) => {
       const r = removeItem(be.ws, ref);
-      const watch = KIND_INFO[r.kind].watch;
-      if (watch !== 'none') be.host.emit('data.changed', { kind: watch.legacy });
+      itemChanged(be, r.kind);
       return r;
     },
     /** Put back a deleted item (`item.remove`'s trashId, or an entry of `trash.list`), through the kind's `ops` facet. */
-    'item.restore': ({ trashId }: { trashId: string }) => restoreItem(be.ws, trashId),
+    'item.restore': ({ trashId }: { trashId: string }) => {
+      const r = restoreItem(be.ws, trashId);
+      itemChanged(be, r.kind);
+      return r;
+    },
+    /** What an item uses and what uses it (read only: the reading of "Export with everything it uses"). */
+    'item.uses': ({ ref }: { ref: unknown }) => itemUses(be.ws, ref),
     /** Reveal file: the folder that holds a workspace file, in the file manager (the file itself is never opened: it could be a program). */
     'workspace.revealFile': ({ path }: { path: string }) => {
       if (!be.host.openPath) throw new ApsError('ConfigurationError', 'Showing files is not available here (TestPion in a browser)', { suggestions: ['Copy path instead.'] });

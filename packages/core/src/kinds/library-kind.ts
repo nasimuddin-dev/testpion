@@ -1,5 +1,6 @@
 import { LIBRARY_LABEL, type ItemRef, type RefResolution } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { restoreFromTrash, trashLibraryItem } from '../storage/trash.js';
 import { libraryIndex, missing, ok } from './ref-index.js';
 import type { ItemKindDef, KindDefs } from './types.js';
 
@@ -17,16 +18,21 @@ export function resolveSaved(store: WorkspaceStore, r: SavedRef): RefResolution 
     : missing(r, `That ${what.toLowerCase()} is no longer saved in this workspace (deleted, or in another workspace).`, { label: 'Search the workspace', view: 'search' });
 }
 
-const saved: Omit<ItemKindDef, 'info'> = { resolve: (store, ref) => resolveSaved(store, ref as SavedRef) };
+type LibraryTrashKind = Parameters<typeof trashLibraryItem>[1];
+/** Delete to Recently deleted and back: the item with its place in the list. */
+const trashOps = (kind: LibraryTrashKind): NonNullable<ItemKindDef['ops']> => ({ remove: (store, id) => trashLibraryItem(store, kind, id), restore: (store, trashId) => restoreFromTrash(store, trashId) });
+const saved = (kind: LibraryTrashKind): Omit<ItemKindDef, 'info'> => ({ resolve: (store, ref) => resolveSaved(store, ref as SavedRef), ops: trashOps(kind) });
 
 export const libraryKinds: KindDefs = {
-  'grpc-call': saved,
-  'ws-connection': saved,
-  prompt: saved,
-  'load-test': saved,
-  evaluation: saved,
-  'rag-target': saved,
+  'grpc-call': saved('grpc-call'),
+  'ws-connection': saved('ws-connection'),
+  prompt: saved('prompt'),
+  'load-test': saved('load-test'),
+  evaluation: saved('evaluation'),
+  'rag-target': saved('rag-target'),
   monitor: {
+    // (a tenant's id, <monitor>@<tenant>, deletes the definition it comes from: there is no monitor of its own to delete)
+    ops: { ...trashOps('monitor'), remove: (store, id) => trashLibraryItem(store, 'monitor', id.includes('@') ? id.slice(0, id.indexOf('@')) : id) },
     resolve: (store, ref) => {
       // a monitor ref, or a library item of `monitors` (toItemRef turns those into monitor refs)
       const r = ref as Extract<ItemRef, { kind: 'monitor' }>;

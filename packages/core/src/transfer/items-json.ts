@@ -462,4 +462,5 @@ export const JSON_ADAPTERS: ItemAdapter[] = [
   libraryAdapter('load-test', 'Load test'),
   libraryAdapter('evaluation', 'Evaluation'),
   libraryAdapter('monitor', 'Monitor'),
+  libraryAdapter('rag-target', 'RAG target'),
 ];

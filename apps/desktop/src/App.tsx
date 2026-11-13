@@ -64,6 +64,7 @@ const ShortcutsDialog = lazy(async () => ({ default: (await import('./components
 const ExportBundleDialog = lazy(() => import('./components/ExportBundleDialog'));
 const ImportBundleDialog = lazy(() => import('./components/ImportBundleDialog'));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
+const UsesDialog = lazy(async () => ({ default: (await import('./components/UsesDialog')).UsesDialog }));
 const AskSearchDialog = lazy(async () => ({ default: (await import('./components/ai/AskSearchDialog')).AskSearchDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
 const TidyImportDialog = lazy(async () => ({ default: (await import('./components/ai/TidyImportDialog')).TidyImportDialog }));
@@ -230,6 +231,7 @@ export default function App() {
   const cookiesOpen = useApp((s) => s.cookiesOpen);
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
+  const usesOf = useApp((s) => s.usesOf);
   const flowGenerate = useApp((s) => s.flowGenerate);
   const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
@@ -651,6 +653,14 @@ export default function App() {
             <CiDialog />
           </Suspense>,
           close({ ci: undefined }),
+        )}
+      {usesOf &&
+        guard(
+          'uses dialog',
+          <Suspense fallback={null}>
+            <UsesDialog />
+          </Suspense>,
+          close({ usesOf: undefined }),
         )}
       {gitItem &&
         guard('item history', <GitItemHistory itemRef={gitItem.ref} name={gitItem.name} tab={gitItem.tab} onClose={() => useApp.getState().set({ gitItem: undefined })} />, close({ gitItem: undefined }))}

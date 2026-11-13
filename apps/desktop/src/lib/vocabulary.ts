@@ -129,6 +129,7 @@ export const LABEL = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   recentlyDeleted: 'Recently deleted…',
+  usesAndUsedBy: 'Uses and used by…',
   /** Deleting puts the item in Recently deleted (or asks first where nothing can bring it back). */
   delete: 'Delete…',
   deleteFolder: 'Delete folder…',

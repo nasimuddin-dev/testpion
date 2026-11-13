@@ -227,6 +227,8 @@ interface AppState {
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;
+  /** The "Uses and used by" dialog of an item. */
+  usesOf?: ItemRef;
   /** What the evaluations view shows (R-1): the Checks of AI quality, or of RAG bots; the rail highlights that item. */
   evalHost?: 'ai' | 'rag';
   /** The "Compare OpenAPI versions" dialog. */

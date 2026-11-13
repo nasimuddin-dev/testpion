@@ -409,5 +409,6 @@ export function withRefDefaults(c: NodeMenuCtx, kind: NodeKind): NodeMenuCtx {
   const ref = c.ref;
   const link = ref && !c.on.copyLink ? { copyLink: () => copyText(itemRefUrl(ref), 'the link') } : {};
   const git = ref ? gitActions(kind, c) : undefined;
-  return { ...c, ...(git ? { repo: c.repo ?? git.repo, disabled: { ...git.disabled, ...c.disabled } } : {}), on: { ...transfer, ...link, ...git?.on, ...c.on } };
+  const uses = ref && !c.on.uses ? { uses: () => useApp.getState().set({ usesOf: ref }) } : {};
+  return { ...c, ...(git ? { repo: c.repo ?? git.repo, disabled: { ...git.disabled, ...c.disabled } } : {}), on: { ...transfer, ...link, ...uses, ...git?.on, ...c.on } };
 }

@@ -104,7 +104,8 @@ export type MenuLabelKey =
   | 'makeActive'
   | 'moveUp'
   | 'moveDown'
-  | 'recentlyDeleted';
+  | 'recentlyDeleted'
+  | 'usesAndUsedBy';
 
 /**
  * What a node's menu knows of its context, without the host's handlers: which actions the view can do (`on`, by action
@@ -301,6 +302,9 @@ export const STANDARD_ACTIONS = [
   { id: 'monitor', group: 'tools', label: 'monitor', icon: 'alarm-clock', cap: 'monitor' },
   { id: 'ci', group: 'tools', label: 'runInCi', icon: 'workflow', cap: 'ci' },
   { id: 'testFile', group: 'tools', label: testFileLabel, icon: 'file-check-2', cap: 'test-file' },
+  // what the item names in the workspace and what names it (item.uses): the window opens it for any node with a ref
+  // (not on a collection, its folders or a test file: their menus are full, and Export ▸ Export with everything it uses… shows the same reading)
+  { id: 'uses', group: 'tools', label: 'usesAndUsedBy', icon: 'scan-search', cap: 'uses', appliesTo: (k) => !['collection', 'folder', 'test', 'flow'].includes(k) },
   { id: 'settings', group: 'tools', label: 'settings', icon: 'settings-2', appliesTo: isListItem, last: true },
   // one submenu (History in git…, Stage changes, Discard changes…): the menus stay within 18 items
   { id: 'gitMenu', group: 'git', label: 'gitMenu', icon: 'git-compare', cap: 'git-history', when: (c) => !!c.repo },

@@ -91,6 +91,7 @@ describe('round trip: every kind goes out and comes back the same', () => {
       'prompt',
       'proto',
       'provider',
+      'rag-target',
       'script-package',
       'spec',
       'test',

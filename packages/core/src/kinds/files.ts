@@ -2,7 +2,7 @@ import type { ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { CAPTURE_SESSIONS_DIR, captureSessionFileName } from '../debugger/capture-history.js';
 import { existsSync } from 'node:fs';
-import { moveToTrash, restoreFromTrash, trashSpec } from '../storage/trash.js';
+import { moveToTrash, restoreFromTrash, trashSpec, trashTestFile } from '../storage/trash.js';
 import { sharedDataFile, sharedDataSource, sharedSpecFile, sharedSpecSource } from '../storage/shared-sources.js';
 import { fileIn, missing, ok } from './ref-index.js';
 import type { KindDefs } from './types.js';
@@ -11,8 +11,8 @@ type TestRef = Extract<ItemRef, { kind: 'test' | 'flow' }>;
 
 /** Kinds stored as documents of their own (tests/, specs/, datasets/, debugger/): there when the file is. */
 export const fileKinds: KindDefs = {
-  test: { resolve: (store, ref) => resolveTestFile(store, ref as TestRef) },
-  flow: { resolve: (store, ref) => resolveTestFile(store, ref as TestRef) },
+  test: { resolve: (store, ref) => resolveTestFile(store, ref as TestRef), ops: { remove: (store, id) => trashTestFile(store, 'test', id), restore: (store, trashId) => restoreFromTrash(store, trashId) } },
+  flow: { resolve: (store, ref) => resolveTestFile(store, ref as TestRef), ops: { remove: (store, id) => trashTestFile(store, 'flow', id), restore: (store, trashId) => restoreFromTrash(store, trashId) } },
   'test-case': { resolve: (_store, ref) => ok(ref, (ref as Extract<ItemRef, { kind: 'test-case' }>).testId, 'Test') },
   spec: {
     resolve: (store, ref) => {

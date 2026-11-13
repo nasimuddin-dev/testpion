@@ -37,6 +37,7 @@ export const BUNDLE_KIND_IDS = [
   'load-test',
   'evaluation',
   'monitor',
+  'rag-target',
 ] as const;
 export type BundleKindId = (typeof BUNDLE_KIND_IDS)[number];
 
@@ -172,6 +173,7 @@ export const LIBRARY_OF: Partial<Record<BundleKindId, string>> = {
   'load-test': 'load-tests',
   evaluation: 'evaluations',
   monitor: 'monitors',
+  'rag-target': 'rag-targets',
 };
 
 export const itemKey = (kind: string, id: string): string => `${kind}:${id}`;

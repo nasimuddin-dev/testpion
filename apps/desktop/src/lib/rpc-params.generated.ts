@@ -251,6 +251,7 @@ export interface RpcParamTypes {
   'import.undo': RpcCommonParams & { receipts: string[]; force?: boolean };
   'item.remove': RpcCommonParams & { ref: unknown };
   'item.restore': RpcCommonParams & { trashId: string };
+  'item.uses': RpcCommonParams & { ref: unknown };
   'kafka.connect': RpcCommonParams & { url: string; reads?: unknown[] };
   'kinds.list': RpcCommonParams & { kind?: string; all?: boolean };
   'lib.save': RpcCommonParams & { kind: string; library: Record<string, unknown> };
@@ -448,4 +449,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 431;
+export const RPC_METHOD_COUNT = 432;

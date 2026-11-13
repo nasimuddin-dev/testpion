@@ -61,6 +61,7 @@ import { workspaceLockedBy } from '../backend-health.js';
 import { takeOpenLinks } from '../open-links.js';
 import { isExamplesWorkspace } from '../backend-examples.js';
 import { saveText } from './save-text.js';
+import { itemChanged } from './kinds.js';
 
 /** What the workspace reads from other workspaces' folders, and the environments it gives (the dialog and `testpion workspace share`). */
 function sharedOf(be: Backend) {
@@ -414,7 +415,11 @@ export function workspaceHandlers(be: Backend): Handlers {
     'env.delete': ({ id }: { id: string }) => removeItem(be.ws, { kind: 'environment', environmentId: id }),
     /** Recently deleted items, every kind of the trash (storage/trash.ts KINDS), 30 days. */
     'trash.list': () => listTrash(be.ws),
-    'trash.restore': ({ id }: { id: string }) => restoreFromTrash(be.ws, id),
+    'trash.restore': ({ id }: { id: string }) => {
+      const r = restoreFromTrash(be.ws, id);
+      itemChanged(be, r.kind);
+      return r;
+    },
     'trash.purge': ({ id }: { id?: string }) => purgeTrash(be.ws, id),
     'env.reorder': ({ ids }: { ids: string[] }) => be.ws.reorderEnvironments(ids),
     'currentValues.get': ({ scope, owner }: { scope: 'environment' | 'globals' | 'collectionVariables'; owner?: string }) => {

@@ -53,7 +53,23 @@ const SAMPLE_REF: Partial<Record<KindId, ItemRef>> = {
 };
 
 /** The fixture item each trash kind removes and puts back. */
-const TRASH_IDS: Partial<Record<KindId, string>> = { collection: 'api', environment: 'staging', dataset: 'users.csv', spec: 'specs/petstore.yaml', 'mcp-server': 'weather' };
+const TRASH_IDS: Partial<Record<KindId, string>> = {
+  collection: 'api',
+  environment: 'staging',
+  dataset: 'users.csv',
+  spec: 'specs/petstore.yaml',
+  'mcp-server': 'weather',
+  'grpc-call': 'g-call',
+  'ws-connection': 'ws-echo',
+  test: 'smoke/login.yaml',
+  flow: 'flows/checkout.yaml',
+  provider: 'demo',
+  prompt: 'p-greet',
+  'load-test': 'lt-pets',
+  evaluation: 'ev-tone',
+  'rag-target': 'rag-clinic',
+  monitor: 'mon-pets',
+};
 
 let t: ReturnType<typeof tempDir>;
 let store: WorkspaceStore;
@@ -266,7 +282,7 @@ describe('the item-kind registry is complete', () => {
       expect(resolveItemRef(store, ref).ok, `${k.id} does not resolve after restoreItem`).toBe(true);
     }
     // a kind without the trash capability says why instead of deleting
-    expect(() => removeItem(store, SAMPLE_REF.test)).toThrow(/Test file: cannot be deleted to Recently deleted \(planned for 0\.\d\d\)/);
+    expect(() => removeItem(store, SAMPLE_REF.capture)).toThrow(/Capture session: cannot be deleted to Recently deleted \(sessions are local to this computer\)/);
     expect(() => removeItem(store, SAMPLE_REF.request)).toThrow(/Request: cannot be deleted/);
     expect(() => removeItem(store, 'nonsense')).toThrow(/Not a ref/);
     expect(() => restoreItem(store, 'nope/1--x.json')).toThrow(/Not an entry of Recently deleted/);

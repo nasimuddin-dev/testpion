@@ -1,7 +1,8 @@
 import { FolderPlus, Plus } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { KIND_INFO, savedItemRef, toItemRef, type ItemRef, type KindId } from '@testpion/shared';
-import { deleteWithUndo, putBack } from '../lib/undo-delete';
+import { deleteWithUndo, keepsTrash, putBack } from '../lib/undo-delete';
+import { TrashDialog } from './TrashDialog';
 import { Button, cx, FilterInput } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, moveToFolderItem, OPEN_ICON, treeKeys } from './TreeParts';
@@ -133,6 +134,7 @@ export function FolderList({
   const ql = q.trim().toLowerCase();
   const shown = ql ? items.filter((i) => [i.name, folderOf(i.folder), typeof i.subtitle === 'string' ? i.subtitle : ''].some((t) => t.toLowerCase().includes(ql))) : items;
   const [dropTarget, setDropTarget] = useState<string>();
+  const [trashOpen, setTrashOpen] = useState(false);
   const isOpen = (f: string) => opened[f] ?? true;
   const toggle = (f: string) => setOpened((o) => ({ ...o, [f]: !(o[f] ?? true) }));
   // every folder, General (the built-in one, for the items that have none) first; and the shown items of each, grouped once
@@ -158,7 +160,7 @@ export function FolderList({
   /** The list's header (and its blank area): new item, new folder, expand or collapse every folder. */
   const headerCtx = (): NodeMenuCtx => ({
     create: [{ label: addLabel, icon: <Plus size={14} />, onSelect: () => onAdd() }],
-    on: { newFolder: () => void newFolder(), expandAll: () => setAll(true), collapseAll: () => setAll(false) },
+    on: { newFolder: () => void newFolder(), expandAll: () => setAll(true), collapseAll: () => setAll(false), ...(keepsTrash(kind) ? { recentlyDeleted: () => setTrashOpen(true) } : {}) },
   });
   const itemCtx = (it: FolderListItem): NodeMenuCtx => {
     const own = itemActions?.(it.id);
@@ -172,7 +174,7 @@ export function FolderList({
         rename: () => setRenaming(it.id),
         ...(ops.duplicateItem ? { duplicate: () => void ops.duplicateItem!(it.id) } : {}),
         move: moveToFolderItem({ folders: allFolders, current: it.folder, move: (f) => moveTo(it.id, f) }).items!,
-        delete: () => void deleteWithUndo({ kind, name: it.name, focus: treeKey(id, rowKey.get(it) ?? it.id), run: () => ops.deleteItem(it.id) }),
+        delete: () => void deleteWithUndo({ kind, name: it.name, trash: keepsTrash(kind), focus: treeKey(id, rowKey.get(it) ?? it.id), run: () => ops.deleteItem(it.id) }),
         ...own?.on,
       },
       disabled: own?.disabled,
@@ -266,6 +268,7 @@ export function FolderList({
   return (
     // the keyboard moves through the header and the rows as one list (↑ from the first row reaches the header)
     <div className="h-full flex flex-col min-h-0" onKeyDown={treeKeys} role="tree" aria-label={title}>
+      {trashOpen && <TrashDialog kinds={[kind]} onClose={() => setTrashOpen(false)} />}
       <TreeRowShell kind={`section:${kind}` as NodeKind} nodeId={treeKey(id, 'section')} label={title} header ctx={headerCtx} className="mx-0 pl-3 shrink-0">
         <span className="text-xs font-semibold truncate">{title}</span>
         {items.length > 0 && <CountPill n={items.length} />}

@@ -313,6 +313,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'kinds.list': { kind: 's?', all: 'b?' },
   'item.remove': { ref: 'x' },
   'item.restore': { trashId: 's' },
+  'item.uses': { ref: 'x' },
   'workspace.revealFile': { path: 'wp' },
   'openapi.spec.rename': { path: 'wp', to: 's' },
   'openapi.spec.delete': { path: 'wp' },

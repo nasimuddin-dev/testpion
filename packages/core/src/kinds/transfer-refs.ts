@@ -1,4 +1,4 @@
-import { kindOfLibrary, type ItemRef } from '@testpion/shared';
+import { kindOfLibrary, kindOfPath, type ItemRef } from '@testpion/shared';
 import { bundleKindOf, normalizeId as normalizeBundleId } from '../transfer/registry.js';
 import { partId } from '../transfer/parts.js';
 import type { BundleRef } from '../transfer/types.js';
@@ -37,6 +37,12 @@ export function bundleRefOfItemRef(ref: ItemRef): BundleRef | undefined {
       const k = kindOfLibrary(ref.library);
       const b = k && bundleKindOf(k.id);
       return b ? { kind: b, id: ref.itemId } : undefined;
+    }
+    // a workspace file named by its path (a proto, a mock, a script package, a metric): the bundle item of its kind
+    case 'git-file': {
+      const k = kindOfPath(ref.path);
+      const b = k && bundleKindOf(k.kind);
+      return b ? { kind: b, id: normalizeBundleId(b, ref.path) } : undefined;
     }
     default:
       return undefined;

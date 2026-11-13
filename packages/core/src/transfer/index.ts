@@ -17,6 +17,8 @@ export { adapter as bundleAdapter, bundleKindOf, normalizeId as normalizeBundleI
 export { everythingRefs, folderRefs, parseSelector, sectionRefs, uniqueRefs } from './selection.js';
 export { bundleRefOfItemRef } from '../kinds/transfer-refs.js';
 export type { BundleRef } from './types.js';
+export { itemUses } from './item-uses.js';
+export type { ItemUses, UseRow } from './item-uses.js';
 export { partId, splitPartId, partialCollection, resolveNodeIds } from './parts.js';
 export type { ImportInto } from './into.js';
 export { exportCollectionPackage } from './foreign-package.js';

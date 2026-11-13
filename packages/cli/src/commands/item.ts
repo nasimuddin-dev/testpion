@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { removeItem, restoreItem, trashKindsText, TRASH_DAYS } from '@testpion/core';
-import { dim, green, printJson, withWorkspace } from '../shared.js';
+import { itemUses, removeItem, restoreItem, trashKindsText, TRASH_DAYS } from '@testpion/core';
+import { bold, dim, green, printJson, withWorkspace } from '../shared.js';
 
 /**
  * `testpion item delete <ref>` / `item restore <id>`: delete any item to Recently deleted by its ref and put it back,
@@ -20,6 +20,29 @@ export function registerItemCommand(program: Command): void {
         const r = removeItem(store, ref);
         if (o.json) return printJson(r);
         console.log(`${green(`Deleted ${r.kind} "${r.name}"`)} ${dim(`(${r.trashId}; testpion item restore "${r.trashId}" puts it back)`)}`);
+      }),
+    );
+  item
+    .command('uses')
+    .description('what an item uses and what uses it: the API definitions, datasets, protos, mocks, script packages, MCP servers and environments named in it, and the tests, flows, monitors and collections that name it. Read only. The ref: collection:<id>, request:<collection>/<request>, spec:specs/<path>, dataset:<name>, test:<path>, environment:<id>, mcp-server:<id> …')
+    .argument('<ref>')
+    .requiredOption('-w, --workspace <nameOrPath>')
+    .option('--json', 'print { item, uses, usedBy, missing } as JSON')
+    .action((ref: string, o: { workspace: string; json?: boolean }) =>
+      withWorkspace(o.workspace, (store) => {
+        const r = itemUses(store, ref);
+        if (o.json) return printJson(r);
+        const rows = (title: string, list: typeof r.uses, none: string) => {
+          console.log(bold(title));
+          if (!list.length) return console.log(`  ${dim(none)}`);
+          for (const u of list) console.log(`  ${u.kind}:${u.id}  ${u.name !== u.id ? `${u.name}  ` : ''}${dim(u.via)}`);
+        };
+        rows(`${r.item.kind} "${r.item.name}" uses`, r.uses, 'nothing else in the workspace');
+        rows('Used by', r.usedBy, 'nothing in the workspace names it');
+        if (r.missing.length) {
+          console.log(bold('Named but not in the workspace'));
+          for (const m of r.missing) console.log(`  ${m.to}  ${dim(m.reason)}`);
+        }
       }),
     );
   item

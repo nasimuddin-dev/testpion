@@ -18,7 +18,7 @@ import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
 import { promptText, toastError, useApp, attempt, selectEnvironments } from '../store';
-import { deleteWithUndo } from '../lib/undo-delete';
+import { deleteWithUndo, removeToTrash } from '../lib/undo-delete';
 import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
@@ -273,7 +273,7 @@ export function MonitorsView() {
   };
   /** At once, with Undo in the message (the same as the list's Delete). */
   // a tenant row deletes the definition it comes from, so every tenant's row goes with it: the message says so
-  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: definitionName(m), run: () => monitorOps.deleteItem(m.id), note: m.tenant ? 'Every tenant of it went with it (one definition); its past runs stay in the Tests view' : 'Its past runs stay in the Tests view' });
+  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: definitionName(m), trash: true, run: () => monitorOps.deleteItem(m.id), note: m.tenant ? 'Every tenant of it went with it (one definition); its past runs stay in the Tests view' : 'Its past runs stay in the Tests view' });
   /** The open monitor's ⋯ (its breadcrumb): its menu as its row in the list has it (lib/node-menu.ts): edit, run, pause, rename, duplicate, Delete… with Undo. */
   const monitorMenu = (m: MonitorRow): MenuItem[] =>
     openItemMenu('monitor', {
@@ -349,14 +349,11 @@ export function MonitorsView() {
     renameItem: (id, name) => update(id, { name }),
     moveItem: (id, folder) => update(id, { folder }),
     deleteItem: async (id) => {
-      const m = rows.find((x) => x.id === id);
-      await call('monitor.delete', { id });
+      // to Recently deleted, with its place (a tenant's row deletes the definition it comes from); its past runs never go
+      const back = await removeToTrash({ kind: 'monitor', monitorId: id });
       await load();
-      // the undo saves the monitor again under its id (its settings, folder and schedule); its past runs never went
       return async () => {
-        if (!m) return;
-        const { lastResult: _r, running: _x, schedule: _s, nextRunAt: _n, due: _d, ...data } = m;
-        await call('monitor.save', { monitor: data });
+        await back();
         await load();
       };
     },

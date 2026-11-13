@@ -25,7 +25,7 @@ import { focusRow, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { useAreaMenu } from '../components/AreaMenu';
 import { useTreeOpen } from '../lib/tree-state';
-import { deleteWithUndo } from '../lib/undo-delete';
+import { deleteWithUndo, removeToTrash } from '../lib/undo-delete';
 import { openItemMenu } from '../lib/item-menu';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { copyText } from '../lib/clipboard';
@@ -602,6 +602,24 @@ export function TestsView() {
     walk(n);
     if (files.length > 200 && !(await confirmAction({ title: 'Delete the folder', message: `Delete tests/${n.path} and the ${plural(files.length, 'file')} in it? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
     let kept: Array<{ path: string; content: string }> = [];
+    // a file goes to Recently deleted (the one delete of a test file: the row's, the CLI's, an agent's)
+    let back: (() => Promise<unknown>) | undefined;
+    if (!dir)
+      return void (await deleteWithUndo({
+        kind: 'test',
+        name: n.path,
+        trash: true,
+        focus: `tests:${n.path}`,
+        run: async () => {
+          back = await removeToTrash({ kind: 'test', path: n.path });
+          for (const p of openFilesRef.current.filter((p) => p === n.path)) await closeFile(p, false);
+          await loadTree();
+        },
+        undo: async () => {
+          await back?.();
+          await loadTree();
+        },
+      }));
     await deleteWithUndo({
       kind: dir ? 'folder' : 'test',
       name: n.path,
@@ -664,9 +682,21 @@ export function TestsView() {
         ...(test ? { monitor: () => useApp.getState().openIntent('monitors', { create: { testFile: n.path } }), ci: () => useApp.getState().set({ ci: { tests: [n.path] } }), exposeMcp: () => void exposeFile(n.path) } : {}),
         rename: () => setRenamingPath(n.path),
         duplicate: () => void duplicateFile(n.path),
+        move: () => void moveFile(n),
         delete: () => void deletePath(n),
       },
     };
+  };
+  /** Move to…: a test file to another folder of tests/ (its new path); never onto another file. */
+  const moveFile = async (n: Node) => {
+    const to = (await promptText('Move test file', { message: 'New path inside tests/ (a folder that is not there yet is made)', value: n.path, okLabel: 'Move' }))?.trim().replace(/^\/+|\/+$/g, '');
+    if (!to || to === n.path) return;
+    if (findNode(tree, to)) return void useApp.getState().toast(`tests/${to} exists already`, 'warning');
+    await attempt(async () => {
+      await call('tests.move', { from: n.path, to });
+      renameOpen(n.path, to);
+      await loadTree();
+    });
   };
   /** Rename or move a folder of test files (its path inside tests/): every file goes to the new path; never onto another folder. */
   const renameFolder = async (n: Node) => {

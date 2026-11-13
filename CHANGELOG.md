@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Recently deleted, for more kinds
+
+- **A deleted gRPC call, connection, prompt, load test, evaluation, monitor, RAG target, test file, flow or AI provider goes to Recently deleted** and stays there for 30 days, like collections and environments already did. Undo in the message still brings it back at once, in its place; after that, *Recently deleted…* in the list's menu (and `testpion trash list`) does. An AI provider's API key stays in the secret store, so a restored provider works again.
+- `testpion item delete` and the MCP tool `delete_item` take those kinds too (`saved:<library>:<id>`, `test:<path>`, `monitor:<id>`, `provider:<id>`).
+
+### Uses and used by
+
+- **Uses and used by…** in an item's menu lists what the item names in the workspace (API definitions, datasets, protos, mocks, script packages, MCP servers, environments, its collection) and what names it (tests, flows, monitors, calls, collections). The same reading as *Export with everything it uses*; nothing runs.
+- `testpion item uses <ref> [--json]` and the MCP tool `item_uses` answer the same: check before you delete or rename something.
+
+### Smaller changes
+
+- A test file or a flow has **Move to…** (a new path inside `tests/`).
+- A RAG target is exported and imported in bundles, like the other saved items.
+
 ## 0.57.0 — 2026-11-12
 
 ### Test data from traces

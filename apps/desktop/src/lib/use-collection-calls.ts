@@ -16,7 +16,7 @@ import { saveAsTest } from './save-test';
 import { sharedCall } from './shared-call';
 import type { ExtraGroup, PlacedKind } from './tree-rows';
 import { treeKey } from './tree-state';
-import { deleteMcpServerWithUndo, deleteWithUndo, putBack } from './undo-delete';
+import { deleteMcpServerWithUndo, deleteWithUndo, removeToTrash } from './undo-delete';
 
 /**
  * A collection's gRPC calls and connections for the collections tree (CollectionTree): they are kept in the workspace
@@ -315,31 +315,30 @@ export function useCollectionCalls(listed: Collection[]): {
         delete: () => {
           // the whole saved item (its request and settings) and its place, to put it back as it was; the calls that
           // followed it follow what it followed, and follow it again after Undo
-          let removed: { item: LibraryItem<unknown>; at: number } | undefined;
+          let back: (() => Promise<unknown>) | undefined;
           let after = new Map<string, string>();
           const others = PLACED.filter((k) => k !== kind);
           void deleteWithUndo({
             kind: collectionCallKind(kind),
             name: item.name,
+            trash: true,
             focus: treeKey(item.collectionId ?? '', kind, item.id),
             run: async () => {
               closeTabsFor([item.id]);
               after = followers(item.collectionId, item.id);
-              await editLibrary(kind, (items) => {
-                const at = items.findIndex((i) => i.id === item.id);
-                if (at >= 0) removed = { item: items[at]!, at };
-                return withAfter(
-                  items.filter((i) => i.id !== item.id),
-                  after,
-                );
-              });
+              // to Recently deleted, with its place in the library
+              back = await removeToTrash(ref);
+              if (after.size) await editLibrary(kind, (items) => withAfter(items, after));
+              else await load();
               for (const k of others) if (listOf(k).some((i) => after.has(i.id))) await editPlaced(k, (items) => withAfter(items, after));
             },
             undo: async () => {
-              if (!removed) return;
-              const back = new Map([...after.keys()].map((id) => [id, item.id]));
-              await editLibrary(kind, (items) => withAfter(putBack(items, removed!.item, removed!.at), back));
-              for (const k of others) if (listOf(k).some((i) => back.has(i.id))) await editPlaced(k, (items) => withAfter(items, back));
+              if (!back) return;
+              await back();
+              const again = new Map([...after.keys()].map((id) => [id, item.id]));
+              if (again.size) await editLibrary(kind, (items) => withAfter(items, again));
+              else await load();
+              for (const k of others) if (listOf(k).some((i) => again.has(i.id))) await editPlaced(k, (items) => withAfter(items, again));
             },
           });
         },

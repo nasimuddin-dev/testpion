@@ -22,7 +22,7 @@ const FILE_ITEM: Capabilities = {
   move: { planned: '0.58' },
   favorite: { na: 'favorites are saved requests (one click away in the sidebar)' },
   delete: true,
-  trash: { planned: '0.58' },
+  trash: { planned: '0.59' },
   run: { na: 'nothing to run: it is used by what runs' },
   monitor: { na: 'monitors run collections and test files on a schedule' },
   ci: { na: 'CI runs collections and test files' },
@@ -32,7 +32,8 @@ const FILE_ITEM: Capabilities = {
   export: { planned: '0.58' },
   // (a request is imported as a copied command or a request file; the others of this base have no import of their own yet)
   import: { planned: '0.58' },
-  uses: { planned: '0.58' },
+  // what it names in the workspace and what names it (transfer/item-uses.ts: `testpion item uses`, item_uses, Uses and used by…)
+  uses: true,
   versioned: { planned: '0.58' },
   'git-history': { planned: '0.58' },
   'git-discard': { planned: '0.58' },
@@ -103,7 +104,8 @@ const LIBRARY_ITEM: Capabilities = {
   ...FILE_ITEM,
   'open-new-tab': true,
   move: true,
-  trash: { planned: '0.58' },
+  // the item and its place in the list go to Recently deleted (storage/trash.ts)
+  trash: true,
   // a stable file (no save time), a row in the Git view by name and a change mark on its row (release A of planning/git-everything.md)
   versioned: true,
   export: true,
@@ -112,9 +114,9 @@ const LIBRARY_ITEM: Capabilities = {
 
 /* ------------------------------------------------------------------ delete policies shared by several kinds */
 
-const LIBRARY_DELETE: DeletePolicy = { mode: 'undo', reason: 'Undo saves it again in its library, in its place' };
+const LIBRARY_DELETE: DeletePolicy = { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo and the trash put it back in its place' };
 const TRASH_DELETE: DeletePolicy = { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo and the trash put it back' };
-const TEST_DELETE: DeletePolicy = { mode: 'undo', reason: 'its text is kept until the message goes (a folder of more than 200 files asks first instead)' };
+const TEST_DELETE: DeletePolicy = { mode: 'undo', reason: 'a file goes to Recently deleted (30 days); a folder keeps its files until the message goes (one of more than 200 files asks first instead)' };
 
 /* ------------------------------------------------------------------ the kinds */
 
@@ -209,11 +211,11 @@ const KINDS: readonly ItemKindInfo[] = [
       move: true,
       favorite: true,
       trash: { na: NA_NESTED },
-      run: { planned: '0.58' },
+      run: { na: 'a request is sent from its editor (Send); a run is of its folder or its collection' },
       monitor: true,
-      ci: { planned: '0.58' },
+      ci: { na: 'CI runs collections, folders and test files: save the request as a test file to run it alone' },
       'test-file': true,
-      flow: { planned: '0.58' },
+      flow: { na: 'a flow is generated from a collection or a folder' },
       ai: true,
       export: true,
       // cURL, fetch, PowerShell and HTTPie commands and request files import into a collection (the Import dialog, `testpion import`)
@@ -239,7 +241,7 @@ const KINDS: readonly ItemKindInfo[] = [
     watch: { legacy: 'library', canonical: 'grpc-call' },
     git: { merge: 'by-id' },
     sample: 'library/grpc.json',
-    capabilities: { ...LIBRARY_ITEM, 'test-file': true, monitor: { planned: '0.58' } },
+    capabilities: { ...LIBRARY_ITEM, 'test-file': true, monitor: { na: 'monitors run collections and test files: save the call as a test file and monitor that' } },
     deletes: LIBRARY_DELETE,
   },
   {
@@ -309,6 +311,7 @@ const KINDS: readonly ItemKindInfo[] = [
       trash: { na: 'one per workspace' },
       export: { na: 'part of every whole-workspace export' },
       import: { na: 'part of every whole-workspace import' },
+      uses: { na: 'it holds the variables any item can name: Find usages on a variable lists them' },
       versioned: true,
       search: { na: 'its variables are found by name' },
     },
@@ -337,8 +340,9 @@ const KINDS: readonly ItemKindInfo[] = [
       ci: true,
       'test-file': { na: 'it is a test file already' },
       flow: { na: 'opened as a flow in the canvas (a flow file)' },
-      move: { planned: '0.58' },
-      trash: { planned: '0.58' },
+      // Move to… (a path inside tests/), drag and drop, `tests.move`
+      move: true,
+      trash: true,
       export: true,
       import: true,
       versioned: true,
@@ -366,7 +370,8 @@ const KINDS: readonly ItemKindInfo[] = [
       ci: true,
       'test-file': { na: 'it is a test file already' },
       flow: { na: 'it is a flow already' },
-      trash: { planned: '0.58' },
+      trash: true,
+      move: true,
       export: true,
       import: true,
       versioned: true,
@@ -419,7 +424,8 @@ const KINDS: readonly ItemKindInfo[] = [
       move: true,
       trash: true,
       'test-file': { na: 'tests come from an API definition with Generate tests…' },
-      flow: { planned: '0.58' },
+      // Generate flows… (one flow per chain of operations)
+      flow: true,
       ai: true,
       export: true,
       import: true,
@@ -507,8 +513,8 @@ const KINDS: readonly ItemKindInfo[] = [
       trash: true,
       run: { na: 'a server is connected (Connect), not run' },
       versioned: true,
-      'test-file': { planned: '0.58' },
-      monitor: { planned: '0.58' },
+      'test-file': { na: 'a test is saved from one of its tools (Tools ▸ Save as test), not from the server' },
+      monitor: { na: 'monitors run collections and test files: save a tool call as a test file and monitor that' },
     },
     deletes: { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo puts it back in its place and reconnects it' },
   },
@@ -554,8 +560,8 @@ const KINDS: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     listed: true,
     sample: 'providers.json',
-    capabilities: { ...FILE_ITEM, rename: { na: 'renamed in its settings' }, move: { na: 'providers have no folders' }, versioned: true, export: true, import: true },
-    deletes: { mode: 'undo', reason: 'Undo saves it again in its place (its key stays in the OS store)' },
+    capabilities: { ...FILE_ITEM, rename: { na: 'renamed in its settings' }, move: { na: 'providers have no folders' }, trash: true, versioned: true, export: true, import: true },
+    deletes: { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo puts it back in its place (its key stays in the OS store)' },
   },
   {
     id: 'prompt',
@@ -573,7 +579,7 @@ const KINDS: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     listed: true,
     sample: 'library/ai-prompts.json',
-    capabilities: { ...LIBRARY_ITEM, 'test-file': { planned: '0.58' } },
+    capabilities: { ...LIBRARY_ITEM, 'test-file': { planned: '0.59' } },
     deletes: LIBRARY_DELETE,
   },
   {
@@ -592,7 +598,7 @@ const KINDS: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     listed: true,
     sample: 'library/load-tests.json',
-    capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.58' } },
+    capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.59' } },
     deletes: LIBRARY_DELETE,
   },
   {
@@ -631,7 +637,7 @@ const KINDS: readonly ItemKindInfo[] = [
     listed: true,
     sample: 'library/monitors.json',
     capabilities: { ...LIBRARY_ITEM, run: true },
-    deletes: { mode: 'undo', reason: 'Undo saves it again under its id (schedule and settings); its past runs never went' },
+    deletes: { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo puts it back under its id (schedule and settings); its past runs never went' },
   },
   {
     id: 'rag-target',
@@ -653,11 +659,7 @@ const KINDS: readonly ItemKindInfo[] = [
     capabilities: {
       ...LIBRARY_ITEM,
       'open-new-tab': { na: 'it opens in AI Lab ▸ RAG, in a dialog, not in an editor tab' },
-      trash: { planned: '0.58' },
-      run: { planned: '0.58' },
-      export: { planned: '0.58' },
-      import: { planned: '0.58' },
-      uses: { planned: '0.58' },
+      run: { na: 'it is called by the evaluations that name it (Test connection probes it)' },
     },
     deletes: LIBRARY_DELETE,
   },
@@ -681,6 +683,7 @@ const KINDS: readonly ItemKindInfo[] = [
       ...FILE_ITEM,
       export: true,
       import: true,
+      versioned: { planned: '0.59' },
       open: { na: 'edited in AI Lab ▸ RAG ▸ Metrics, where the metrics are listed' },
       link: { na: 'used by name (custom/<id>) in evaluations, presets and formulas' },
       rename: { na: 'the file name is the metric id that evaluations name: make it again under another id (New) and delete the old file' },
@@ -713,6 +716,10 @@ const KINDS: readonly ItemKindInfo[] = [
       move: { na: 'one rule list per workspace' },
       delete: { na: 'edited in place (each rule has its own Delete)' },
       trash: { na: 'edited in place (each rule has its own Delete)' },
+      export: { na: 'a workspace file: it travels with git, and its enabled rules in a session share bundle' },
+      // Fiddler AutoResponder rules (.farx) and the rules of a share bundle are imported into it
+      import: true,
+      uses: { na: 'rules name hosts and files of this computer, not items of the workspace' },
       versioned: true,
       search: { na: 'one rule list per workspace' },
     },
@@ -736,12 +743,20 @@ const KINDS: readonly ItemKindInfo[] = [
       rename: { na: 'saved again under another name from the Debugger' },
       duplicate: { na: 'saved again under another name from the Debugger' },
       move: { na: 'sessions have no folders' },
-      delete: { planned: '0.58' },
+      delete: true,
       trash: { na: 'sessions are local to this computer' },
       export: true,
+      // a HAR file, a Fiddler SAZ archive or a share bundle opens as a session
+      import: true,
+      uses: { na: 'a record of traffic: it names no item of the workspace' },
       versioned: { na: 'sessions stay on this computer (git-ignored); Share session copies a masked one to debugger/shared/' },
+      'git-history': { na: 'sessions stay on this computer (git-ignored)' },
+      'git-discard': { na: 'sessions stay on this computer (git-ignored)' },
+      'git-stage': { na: 'sessions stay on this computer (git-ignored)' },
+      'secret-scan': { na: 'sessions stay on this computer (git-ignored); a shared one is masked first' },
       search: { na: 'listed in the Debugger session menu' },
     },
+    deletes: { mode: 'confirm', reason: 'a saved session cannot be put back (it never goes to Recently deleted)' },
   },
   {
     id: 'baseline',

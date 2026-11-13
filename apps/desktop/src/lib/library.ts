@@ -4,6 +4,9 @@ import { useApp, toastError } from '../store';
 import type { Library, LibraryItem } from '../types';
 import { libraryOps, type FolderListOps } from '../components/FolderList';
 import { uid } from './format';
+import { kindOfLibrary } from '@testpion/shared';
+import { closeTabsFor } from '../components/EditorTabs';
+import { keepsTrash, removeToTrash } from './undo-delete';
 
 /**
  * Saved items of one kind with folders (WebSocket connections, AI prompts …), stored in the workspace
@@ -35,7 +38,24 @@ export function useLibrary<T>(kind: string) {
     },
     [kind, reload],
   );
-  const ops: FolderListOps = useMemo(() => libraryOps(lib, save, () => uid('lib-'), () => call<Library<T>>('lib.get', { kind })), [lib, save, kind]);
+  const ops: FolderListOps = useMemo(() => {
+    const base = libraryOps(lib, save, () => uid('lib-'), () => call<Library<T>>('lib.get', { kind }));
+    const info = kindOfLibrary(kind);
+    if (!info || !keepsTrash(info.id)) return base;
+    // a kind that keeps Recently deleted: the item goes there (with its place), and Undo brings it back from there
+    return {
+      ...base,
+      deleteItem: async (id) => {
+        closeTabsFor([id]);
+        const back = await removeToTrash({ kind: 'saved', library: kind, itemId: id });
+        await reload();
+        return async () => {
+          await back();
+          await reload();
+        };
+      },
+    };
+  }, [lib, save, kind, reload]);
   /** Add or replace an item; returns its id. */
   const put = useCallback(
     async (item: Omit<LibraryItem<T>, 'id'> & { id?: string }) => {

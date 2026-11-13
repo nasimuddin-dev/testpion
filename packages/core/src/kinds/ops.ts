@@ -39,7 +39,8 @@ export function itemRefOf(value: unknown): ItemRef {
 
 /** The id a kind's ops take: the ref's first id (a collection's id, a dataset's name, a spec's path …). */
 function refId(ref: ItemRef): string | undefined {
-  const field = ITEM_REF_FIELDS[ref.kind][0]!.replace(/\?$/, '');
+  // (a saved item's id is its itemId: its first field names the library)
+  const field = ref.kind === 'saved' ? 'itemId' : ITEM_REF_FIELDS[ref.kind][0]!.replace(/\?$/, '');
   const v = (ref as unknown as Record<string, unknown>)[field];
   return typeof v === 'string' && v ? v : undefined;
 }
@@ -48,8 +49,7 @@ function refId(ref: ItemRef): string | undefined {
 function refOfId(kindId: KindId, id: string): ItemRef | undefined {
   const info = kindInfoOf(kindId);
   if (!info?.ref) return undefined;
-  const r: Record<string, string> = { kind: info.ref, [ITEM_REF_FIELDS[info.ref][0]!.replace(/\?$/, '')]: id };
-  if (info.ref === 'saved' && info.library) r.library = info.library;
+  const r: Record<string, string> = info.ref === 'saved' ? { kind: 'saved', library: info.library ?? '', itemId: id } : { kind: info.ref, [ITEM_REF_FIELDS[info.ref][0]!.replace(/\?$/, '')]: id };
   return toItemRef(r);
 }
 

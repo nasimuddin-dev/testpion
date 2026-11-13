@@ -80,6 +80,7 @@ const ORDER: BundleKindId[] = [
   'load-test',
   'evaluation',
   'monitor',
+  'rag-target',
 ];
 
 const outcome = (i: PreviewItem, target?: Target, why?: string): ItemOutcome => ({ kind: i.kind, id: i.id, name: i.name, ...(target ? { target } : {}), ...(why ? { why } : {}) });

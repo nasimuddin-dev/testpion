@@ -1,4 +1,4 @@
-import { deletePolicy, KIND_INFO, type KindId } from '@testpion/shared';
+import { deletePolicy, KIND_INFO, type ItemRef, type KindId } from '@testpion/shared';
 import { call } from '../api';
 import { attempt, confirmAction, toastError, useApp } from '../store';
 import { closeTabsFor } from '../components/EditorTabs';
@@ -104,7 +104,7 @@ export async function confirmDelete(
   return ok;
 }
 
-export type TrashedKind = 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server';
+export type TrashedKind = KindId;
 
 /** Undo a delete that went to Recently deleted (any kind of the trash): its newest entry comes back. */
 export async function restoreDeleted(kind: TrashedKind, itemId: string): Promise<{ id: string; name: string }> {
@@ -114,6 +114,18 @@ export async function restoreDeleted(kind: TrashedKind, itemId: string): Promise
   if (!hit) throw new Error('It is no longer in Recently deleted (Collections ▸ Recently deleted)');
   return call<{ id: string; name: string }>('trash.restore', { id: hit.id });
 }
+
+/**
+ * THE delete of an item whose kind keeps Recently deleted (the registry's `trash`): through the one `item.remove`, and
+ * what puts it back (`item.restore`). The caller's `deleteWithUndo` passes `trash: true` for the note.
+ */
+export async function removeToTrash(ref: ItemRef): Promise<() => Promise<{ id: string; name: string }>> {
+  const gone = await call<{ trashId: string }>('item.remove', { ref });
+  return () => call<{ id: string; name: string }>('item.restore', { trashId: gone.trashId });
+}
+
+/** Whether a kind's delete goes to Recently deleted. */
+export const keepsTrash = (kind: KindId): boolean => KIND_INFO[kind].capabilities.trash === true;
 
 /** A list with `item` back at `index` (or the end), unless it is there already (an undo used twice, another window). */
 export function putBack<T extends { id: string }>(list: T[], item: T, index: number): T[] {

@@ -4,7 +4,7 @@ import { PROVIDER_KINDS, PROVIDER_PRESETS, providerNeedsKey } from '@testpion/sh
 import { CountPill, treeKeys, withRefDefaults } from '../../components/TreeParts';
 import { TreeRowShell } from '../../components/TreeRowShell';
 import { buildNodeMenu, type NodeMenuCtx } from '../../lib/node-menu';
-import { deleteWithUndo } from '../../lib/undo-delete';
+import { deleteWithUndo, removeToTrash } from '../../lib/undo-delete';
 import { call } from '../../api';
 import { useApp, attempt, toastError } from '../../store';
 import type { ProviderConfig } from '../../types';
@@ -71,20 +71,23 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
   /** Delete a provider at once, with Undo (the list as it was comes back; a stored API key stays in the secret store). */
   const removeProvider = (x: ProviderConfig) => {
     const before = list;
+    let back: (() => Promise<unknown>) | undefined;
     return deleteWithUndo({
       kind: 'provider',
       name: x.name,
+      trash: true,
       focus: `providers:${x.id}`,
       note: 'Tests and prompts that use it fail until you choose another provider',
       run: async () => {
         const next = before.filter((y) => y.id !== x.id);
+        // to Recently deleted, with its place in the list (its API key stays in the secret store)
+        back = await removeToTrash({ kind: 'provider', providerId: x.id });
         setList(next);
         if (sel === x.id) setSel(next[0]?.id);
-        await save(next);
       },
       undo: async () => {
+        await back?.();
         setList(before);
-        await save(before);
       },
     });
   };

@@ -543,9 +543,14 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { settings: { defaultTimeoutMs: 60000 }, confirm: true },
   },
   delete_item: {
-    when: 'Use it to delete a collection, environment, dataset, API definition or MCP server the user no longer wants; it goes to Recently deleted, and `restore_item` brings it back.',
-    whenNot: 'For a request or folder of a collection, use `delete_request`; `list_kinds` says which kinds have the `trash` capability.',
+    when: 'Use it to delete an item the user no longer wants; it goes to Recently deleted, and `restore_item` brings it back.',
+    whenNot: 'For a request or folder of a collection, use `delete_request`.',
     example: { ref: 'environment:staging-old', confirm: true },
+  },
+  item_uses: {
+    when: 'Before deleting or renaming an item.',
+    whenNot: 'To move it with what it uses: `export_bundle`.',
+    example: { ref: 'spec:specs/petstore.yaml' },
   },
   restore_item: {
     when: 'Use it to put back an item `delete_item` deleted (its `trashId`), or one listed by `testpion trash list`.',
