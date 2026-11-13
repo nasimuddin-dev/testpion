@@ -64,6 +64,7 @@ testpion tidy <collection>     Duplicate requests, typed-in hosts, empty folders
 testpion replace <c> <find> <with> Find and replace across a collection's requests (preview; --apply saves)
 testpion agent-info               What an AI agent needs to use TestPion here, as JSON (workspace, commands, exit codes, MCP setup)
 testpion kinds [kind]            The kinds of item a workspace holds and what each offers (open, rename, delete with undo, run, CI …), with why an action never applies, and the menus of its rows (--json)
+testpion docs --catalog | --site <dir> -w   The API catalog of the workspace (every API with its requests, API definition, environments, monitors, tests, owners): a table, --json, --html, or a site (index.html, catalog.json, apis/<api>.html)
 testpion item uses <ref> -w [--json]       What an item uses and what uses it (read only): { item, uses, usedBy, missing }
 testpion item delete|restore <ref|id> -w   Delete any item to Recently deleted by its ref (collection:<id>, environment:<id>, dataset:<name>, spec:specs/<path>, mcp-server:<id>, test:<path>, monitor:<id>, provider:<id>, saved:<library>:<id>), or put one back (--json)
 testpion output <output>        Save an output of the app (run results, History, traces, a timeline, a matrix, the changes …) to a file, byte for byte as the app's down arrow does (--format, --out, --list)

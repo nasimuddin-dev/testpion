@@ -252,6 +252,19 @@ Collections document themselves, like Postman's API documentation:
 
 Markdown is rendered with GitHub-flavoured syntax (tables, fenced code, task lists) and sanitised: scripts and event handlers are removed, and links open in your browser.
 
+## API catalog {#catalog}
+
+The **API catalog** (the book button in the Collections header, or *API catalog* in the command palette) lists every API of the workspace on one page. An API is a collection; for each one the catalog says:
+
+- how many requests it has, by method, and where they go (a host, or the variable the URLs start with);
+- the API definition it implements, and how many of that definition's operations have a request;
+- the environments that define its variables, its monitors with their latest result, and the test files and flows that run it;
+- its saved gRPC calls, connections and load tests, and its owners (from CODEOWNERS).
+
+Every name is a link to the item. API definitions that no collection calls yet are listed at the end. **Save as a page…** writes the catalog as one HTML file.
+
+To publish it, build the site on the command line: `testpion docs --site ./api-catalog -w .` writes `index.html`, `catalog.json` and one documentation page per API (the same page as *Export HTML* above). The catalog holds names, counts and statuses only: no values of variables, headers or bodies.
+
 ## Folders
 
 Choose **Edit folder** in a folder's **⋯** menu to set up everything its requests share:

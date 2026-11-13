@@ -12,6 +12,12 @@
 - **Uses and used by…** in an item's menu lists what the item names in the workspace (API definitions, datasets, protos, mocks, script packages, MCP servers, environments, its collection) and what names it (tests, flows, monitors, calls, collections). The same reading as *Export with everything it uses*; nothing runs.
 - `testpion item uses <ref> [--json]` and the MCP tool `item_uses` answer the same: check before you delete or rename something.
 
+### API catalog
+
+- **A catalog of every API in the workspace**: for each collection, its requests and where they go, the API definition it implements and how many of that definition's operations have a request, the environments that define its variables, its monitors with their latest result, the test files and flows that run it, and its owners. Open it with the book button in the Collections header or from the command palette; every name is a link to the item.
+- **`testpion docs --site <dir>`** writes the catalog as a site to host or share: `index.html`, `catalog.json` and a documentation page per API. `testpion docs --catalog` prints it (`--json` for the data, `--html` for one page); the MCP tool `api_catalog` gives agents the same data.
+- The catalog holds names, counts and statuses only: no values of variables, headers or bodies.
+
 ### Variable types
 
 - **A variable can be a Number, a Boolean or JSON**, not only text: the new Type column in an environment, the workspace variables and a collection's variables. A value that does not fit turns red and says why, and is listed in Problems and `testpion attention` before any run.

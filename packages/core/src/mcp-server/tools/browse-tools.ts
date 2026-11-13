@@ -2,6 +2,7 @@ import { environmentRef } from '@testpion/shared';
 import { collectionMarkdown } from '../../report/collection-docs.js';
 import { collectionSavedItems } from '../../runner/collection-realtime.js';
 import { collectionOwners } from '../../git/owners.js';
+import { workspaceCatalog } from '../../report/catalog.js';
 import { callFolderPath, collectionFolders } from '../../storage/collection-calls.js';
 import { secretKeys } from '../../storage/secrets.js';
 import { collectionTiming } from '../../storage/collection-timing.js';
@@ -13,6 +14,12 @@ import type { ModuleToolDeps } from './deps.js';
 export function browseTools(d: ModuleToolDeps): Tool[] {
   const { store, secrets, redactor, collections, findCollection, findRequest, flatten } = d;
   return [
+    {
+      name: 'api_catalog',
+      description: 'Every API (collection) with its requests, hosts, API definition, environments, monitors, tests, owners. Read only.',
+      inputSchema: { type: 'object', properties: {} },
+      run: () => workspaceCatalog(store),
+    },
     {
       name: 'list_collections',
       description: 'List the collections of the TestPion workspace with their request counts (HTTP/GraphQL requests, gRPC calls, WebSocket/MQTT connections).',

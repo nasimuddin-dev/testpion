@@ -5,7 +5,7 @@ import { ReplaceDialog } from '../components/ReplaceDialog';
 import { MoveVariablesDialog } from '../components/MoveVariablesDialog';
 import { TidyDialog } from '../components/TidyDialog';
 import {
-  ArchiveRestore,
+  ArchiveRestore, BookOpen,
   ArrowRightLeft,
   Wrench,
   Brush,
@@ -300,6 +300,9 @@ export function CollectionsView() {
                 </Button>
                 <IconButton label="Capture traffic for one API into a collection" onClick={() => openReverseProxyCapture()}>
                   <Radio />
+                </IconButton>
+                <IconButton label="API catalog" onClick={() => useApp.getState().set({ catalogOpen: true })}>
+                  <BookOpen />
                 </IconButton>
                 <IconButton label="Recently deleted" onClick={() => setTrashOpen(true)}>
                   <ArchiveRestore />

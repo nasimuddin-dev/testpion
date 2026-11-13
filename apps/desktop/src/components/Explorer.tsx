@@ -1,4 +1,4 @@
-import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderInput, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
+import { ArchiveRestore, BookOpen, Database, Download, FileCode2, FilePlus2, FolderInput, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
 import { SharedSourcesDialog, SharedWaitingNotice } from './SharedSourcesDialog';
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { call, on } from '../api';
@@ -626,6 +626,9 @@ export function Explorer() {
       <div className="p-2 shrink-0 flex items-center gap-1">
         <FilterInput className="flex-1 min-w-0" placeholder="Filter" label="Filter requests, connections, servers and definitions" value={filter} onChange={setFilter} />
         <ExpandCollapseToggle start="collapse" onExpand={() => (sections.set(everySection(), true), setExpandAll((n) => n + 1))} onCollapse={() => (sections.set(everySection(), false), setCollapseAll((n) => n + 1))} />
+        <IconButton size="md" label="API catalog" className="shrink-0" onClick={() => useApp.getState().set({ catalogOpen: true })}>
+          <BookOpen />
+        </IconButton>
         <IconButton size="md" label="Recently deleted" className="shrink-0" onClick={() => setTrashOpen(true)}>
           <ArchiveRestore />
         </IconButton>

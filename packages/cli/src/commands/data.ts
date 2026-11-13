@@ -4,7 +4,7 @@ import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef, collectionOwners, ownedBy, isVariableType, type VariableType } from '@testpion/core';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef, collectionOwners, ownedBy, isVariableType, type VariableType, catalogHtml, catalogSite, workspaceCatalog } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, warnUnknownGroup, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
@@ -670,13 +670,46 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('docs')
-    .description('write Markdown or HTML (--html) documentation for a collection (descriptions, requests, parameters, examples; secrets masked)\n<collection> is a collection name or id in the workspace, or a TestPion / Postman v2.1 collection or OpenAPI file or link')
-    .argument('<collection>', 'collection name or id, a file, or an http(s) link')
+    .description('write Markdown or HTML (--html) documentation for a collection (descriptions, requests, parameters, examples; secrets masked)\n<collection> is a collection name or id in the workspace, or a TestPion / Postman v2.1 collection or OpenAPI file or link.\nFor the whole workspace: --catalog prints the API catalog (every API with its requests, API definition, environments, monitors, tests and owners), --site <dir> writes it as a site with a documentation page per API')
+    .argument('[collection]', 'collection name or id, a file, or an http(s) link')
     .option(...WORKSPACE_OPTION)
     .option('-o, --out <file>', 'write to this file instead of stdout')
     .option('--no-examples', 'leave out saved examples')
     .option('--html', 'a self-contained HTML page (sidebar, search, copy buttons) to publish or share')
-    .action(async (ref: string, o: { workspace?: string; out?: string; examples?: boolean; html?: boolean }) => {
+    .option('--catalog', 'the API catalog of the workspace instead of one collection: a table here, the data with --json, one HTML page with --html')
+    .option('--site <dir>', 'write the catalog as a site to host or share: index.html, catalog.json and apis/<api>.html (the folder is made; files of those names are replaced)')
+    .action(async (ref: string | undefined, o: { workspace?: string; out?: string; examples?: boolean; html?: boolean; catalog?: boolean; site?: string }) => {
+      if (o.site) {
+        const dir = resolve(o.site);
+        const { catalog, files } = await withWorkspace(o.workspace, (store) => catalogSite(store, { examples: o.examples }));
+        for (const f of files) {
+          mkdirSync(dirname(join(dir, f.path)), { recursive: true });
+          writeFileSync(join(dir, f.path), f.content);
+        }
+        return respond({ dir, files: files.map((f) => f.path), apis: catalog.apis.length }, () => console.error(dim(`API catalog of ${catalog.apis.length} API${catalog.apis.length === 1 ? '' : 's'} written to ${dir} (open index.html)`)));
+      }
+      if (o.catalog) {
+        const catalog = await withWorkspace(o.workspace, (store) => workspaceCatalog(store));
+        if (o.html) {
+          const html = catalogHtml(catalog, { links: false });
+          if (!o.out) return void process.stdout.write(html);
+          writeFileSync(resolve(o.out), html);
+          return respond({ file: resolve(o.out), format: 'html', bytes: html.length }, () => console.error(dim(`API catalog written to ${resolve(o.out!)}`)));
+        }
+        return respond(catalog, () => {
+          if (!catalog.apis.length) return console.log(dim('This workspace has no collections yet.'));
+          for (const a of catalog.apis) {
+            console.log(`${bold(a.name)}  ${dim(`${a.requests} request${a.requests === 1 ? '' : 's'}${a.hosts.length ? ` · ${a.hosts.join(', ')}` : ''}`)}`);
+            for (const s of a.specs) console.log(`  ${s.path}  ${dim(`${s.withRequest} of ${s.operations} operation${s.operations === 1 ? '' : 's'} ${s.withRequest === 1 ? 'has' : 'have'} a request`)}`);
+            if (a.environments.length) console.log(`  ${dim('environments')} ${a.environments.join(', ')}`);
+            for (const m of a.monitors) console.log(`  ${dim('monitor')} ${m.name}  ${!m.enabled ? dim('off') : m.status === 'passed' ? green('passing') : m.status ? red('failing') : dim('no run yet')}`);
+            if (a.tests.length) console.log(`  ${dim('tests')} ${a.tests.join(', ')}`);
+            if (a.owners.length) console.log(`  ${dim('owners')} ${a.owners.join(', ')}`);
+          }
+          for (const s of catalog.specsWithoutRequests) console.log(`${s.path}  ${dim(`${s.operations} operations, no requests yet`)}`);
+        });
+      }
+      if (!ref) throw new CliError('Name a collection, or pass --catalog or --site <dir> for the whole workspace', EXIT.CONFIG_ERROR);
       const c = await loadCollectionRef(ref, o.workspace);
       const md = o.html ? collectionHtml(c, { examples: o.examples }) : collectionMarkdown(c, { examples: o.examples });
       const format = o.html ? 'html' : 'markdown';

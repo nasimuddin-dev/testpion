@@ -55,6 +55,9 @@ export interface RpcParamTypes {
   'bundle.imports': RpcCommonParams;
   'bundle.preview': RpcCommonParams & { pick?: boolean; base64?: string; path?: string; fileName?: string };
   'bundle.undo': RpcCommonParams & { importId: string; planId?: string };
+  'catalog.get': RpcCommonParams;
+  'catalog.saveHtml': RpcCommonParams;
+  'catalog.site': RpcCommonParams;
   'certificates.check': RpcCommonParams & { host: string };
   'col.addExample': RpcCommonParams & { collectionId: string; requestId: string; name?: string; response: Record<string, unknown>; request?: Record<string, unknown> };
   'col.convertScripts': RpcCommonParams & { collectionId: string; to: string; dryRun?: boolean };
@@ -449,4 +452,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 432;
+export const RPC_METHOD_COUNT = 435;

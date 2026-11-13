@@ -63,7 +63,7 @@ export function exportConvertTools({ store }: { store: WorkspaceStore }): Tool[]
     },
     {
       name: 'convert_script_code',
-      description: `Convert one script from another tool's API to TestPion's tp.* and return it with the findings (calls with no equivalent are marked // TODO(import); a script that does not parse is returned as written with the line). \`from\`: ${SCRIPT_TOOLS.join(', ')}. Nothing is run or saved. Use convert_scripts for the scripts of a collection.\nWhen to use: to check how one snippet from Postman, Bruno, Insomnia, Thunder or Hoppscotch would look in tp.*.\nWhen not: to convert a whole collection (use convert_scripts).\nExample: {"code":"pm.test('ok', () => pm.response.to.have.status(200));","from":"postman"}`,
+      description: `Convert one script from another tool's API to TestPion's tp.* and return it with the findings (calls with no equivalent are marked // TODO(import); a script that does not parse is returned as written with the line). \`from\`: ${SCRIPT_TOOLS.join(', ')}. Nothing is run or saved.\nWhen to use: to check how one snippet would look in tp.*.\nWhen not: to convert a whole collection (use convert_scripts).\nExample: {"code":"pm.test('ok', () => pm.response.to.have.status(200));","from":"postman"}`,
       inputSchema: { type: 'object', properties: { code: str('The script'), from: { type: 'string', enum: [...SCRIPT_TOOLS], description: 'The script API it is written for' } }, required: ['code', 'from'] },
       run: (a) => {
         const r = convertScriptText(String(a.code ?? ''), requireScriptTool(a.from));
@@ -73,7 +73,7 @@ export function exportConvertTools({ store }: { store: WorkspaceStore }): Tool[]
     {
       name: 'convert_scripts',
       write: true,
-      description: `Convert the scripts of a collection of the workspace from another tool's script API (${SCRIPT_TOOLS.join(', ')}) to tp.* (an import with keep_pm, a collection pasted from a colleague), optionally lifting simple tests into assertions. Saves the collection unless \`dry_run\`. Returns what was converted, what was kept and why, and the findings by item.\nWhen to use: after an import that kept pm.* or foreign scripts, or for a collection pasted from a colleague.\nWhen not: to preview only (pass dry_run) or to convert a single snippet (use convert_script_code).\nExample: {"collection":"Orders API","from":"bruno","dry_run":true}`,
+      description: `Convert the scripts of a collection of the workspace from another tool's script API (${SCRIPT_TOOLS.join(', ')}) to tp.*, optionally lifting simple tests into assertions. Saves the collection unless \`dry_run\`. Returns what was converted, what was kept and why.\nWhen to use: after an import that kept pm.* or foreign scripts, or for a collection pasted from a colleague.\nWhen not: to convert a single snippet (use convert_script_code).\nExample: {"collection":"Orders API","from":"bruno","dry_run":true}`,
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), from: { type: 'string', enum: [...SCRIPT_TOOLS] }, lift_tests: { type: 'boolean', description: 'Turn simple tests (status, response time, headers, JSON fields) into assertions' }, dry_run: { type: 'boolean', description: 'Only report' } }, required: ['collection', 'from'] },
       run: (a) => {
         const c = collectionOf(a.collection);

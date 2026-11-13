@@ -60,6 +60,23 @@ function rootOf(store: WorkspaceStore, selector: unknown): BundleRef {
   }
 }
 
+/** Every direct use in the workspace, read once (the catalog asks for all of them): the edges as an export follows them, and each item's name by its key (`kind:id`). */
+export function workspaceUses(live: WorkspaceStore): { edges: Array<{ from: string; to: string; via: string }>; names: Map<string, string> } {
+  const store = cachedReads(live);
+  const texts = new Map<string, string | undefined>();
+  const read = (r: BundleRef): string | undefined => {
+    const key = itemKey(r.kind, r.id);
+    if (!texts.has(key)) {
+      const s = adapter(r.kind).snapshot(store, r.id, new SecretStripper());
+      texts.set(key, s && !s.data.includes(0) ? s.data.toString('utf8') : undefined);
+    }
+    return texts.get(key);
+  };
+  const names = new Map<string, string>();
+  for (const k of ALL_BUNDLE_KINDS) for (const i of adapter(k).list(store)) names.set(itemKey(k, i.id), i.name);
+  return { edges: collectUses(store, everythingRefs(store, { providers: true }), read).edges, names };
+}
+
 export function itemUses(live: WorkspaceStore, selector: unknown): ItemUses {
   const store = cachedReads(live);
   const root = rootOf(store, selector);

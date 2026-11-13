@@ -3,6 +3,11 @@ import type { ToolDoc } from './tool.js';
 /** When to use each fixed MCP tool, when not, and one example call: the second half of its description (tool-contract.ts composes them). */
 export const TOOL_DOCS: Record<string, ToolDoc> = {
   // ── Browsing the workspace ──────────────────────────────────────────────
+  api_catalog: {
+    when: 'For an overview of the APIs.',
+    whenNot: 'One collection: `list_requests`.',
+    example: {},
+  },
   list_collections: {
     when: 'Use it first, to learn which collections exist and their exact names before calling a tool that takes `collection`.',
     whenNot: 'To find one request or variable by name across the workspace, use `search_workspace` instead.',

@@ -64,6 +64,7 @@ const ShortcutsDialog = lazy(async () => ({ default: (await import('./components
 const ExportBundleDialog = lazy(() => import('./components/ExportBundleDialog'));
 const ImportBundleDialog = lazy(() => import('./components/ImportBundleDialog'));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
+const CatalogDialog = lazy(async () => ({ default: (await import('./components/CatalogDialog')).CatalogDialog }));
 const UsesDialog = lazy(async () => ({ default: (await import('./components/UsesDialog')).UsesDialog }));
 const AskSearchDialog = lazy(async () => ({ default: (await import('./components/ai/AskSearchDialog')).AskSearchDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
@@ -232,6 +233,7 @@ export default function App() {
   const searchOpen = useApp((s) => s.searchOpen);
   const ci = useApp((s) => s.ci);
   const usesOf = useApp((s) => s.usesOf);
+  const catalogOpen = useApp((s) => s.catalogOpen);
   const flowGenerate = useApp((s) => s.flowGenerate);
   const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
@@ -504,6 +506,7 @@ export default function App() {
       { id: 'm-exp-ws', label: 'Export workspace (older format)', hint: 'File', run: () => void runMenuCommand('export-workspace') },
       { id: 'm-exp-bundle', label: 'Export a TestPion bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
       { id: 'm-import-bundle', label: 'Import a TestPion bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
+      { id: 'api-catalog', label: 'API catalog: every API with its definition, environments, monitors and tests', hint: VIEW_NAME.collections, run: () => s.set({ catalogOpen: true }) },
       { id: 'run-collection', label: 'Run a collection…', hint: VIEW_NAME.collections, run: () => s.openIntent('collections', { run: true }) },
       { id: 'mock-server', label: 'Start a mock server for a collection…', hint: VIEW_NAME.collections, run: () => s.openIntent('collections', { mock: true }) },
       { id: 'open-globals', label: 'Open globals', hint: VIEW_NAME.environments, run: () => void openRef({ kind: 'environment', scope: 'globals' } as never) },
@@ -653,6 +656,14 @@ export default function App() {
             <CiDialog />
           </Suspense>,
           close({ ci: undefined }),
+        )}
+      {catalogOpen &&
+        guard(
+          'API catalog',
+          <Suspense fallback={null}>
+            <CatalogDialog />
+          </Suspense>,
+          close({ catalogOpen: false }),
         )}
       {usesOf &&
         guard(
