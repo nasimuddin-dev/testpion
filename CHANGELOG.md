@@ -42,6 +42,10 @@
 - The CLI reads `TESTPION_SECRET_*` first, then the vault, so pipelines keep working as they are. A run never writes the vault.
 - **`testpion git fix-secrets --apply`** now moves secrets typed into staged files to the vault and writes the `{{variables}}`, as *Fix all* does in the app. Before, the command line could only print the plan.
 
+### Package managers
+
+- `npm run package-manifests -- <version>` writes the winget, Homebrew cask and Scoop manifests of a release from that release's own checksum list, ready to submit (see *Contributing ▸ Package managers* in the docs). Nothing is submitted by the command.
+
 ### Smaller changes
 
 - A test file or a flow has **Move to…** (a new path inside `tests/`).

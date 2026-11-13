@@ -208,6 +208,7 @@ const docsSidebar = [
       { text: 'The engine as an SDK', link: '/architecture/engine-sdk' },
       { text: 'Development', link: '/contributing/development' },
       { text: 'Contributor Notes', link: '/contributing/architecture' },
+      { text: 'Package managers', link: '/contributing/package-managers' },
     ],
   },
 ];

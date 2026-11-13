@@ -24,6 +24,7 @@
     "dev:web": "npm run dev:web -w @testpion/desktop",
     "bench": "node scripts/bench.mjs",
     "pack:cli": "node scripts/pack-cli.mjs --tarball",
+    "package-manifests": "node scripts/package-manifests.mjs",
     "docs:dev": "npm run dev -w docs",
     "docs:build": "npm run build -w docs",
     "docs:migrate": "node scripts/gen-migrate-docs.mjs"
