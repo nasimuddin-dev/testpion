@@ -121,6 +121,7 @@ export const LABEL = {
   exportArazzo: 'Export as Arazzo…',
   exportReport: 'Export report…',
   reproBundle: 'Repro bundle…',
+  createIssue: 'Create issue…',
   copyRunId: 'Copy run id',
   triageWithAi: 'Explain and fix failures with AI…',
   openRequest: 'Open request',

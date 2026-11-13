@@ -369,6 +369,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'report.workspace': { days: 'n?', tzOffsetMin: 'n?' },
   'runs.exportReport': { runId: 's', format: 's' },
   'runs.repro': { runId: 's', all: 'b?' },
+  'runs.issue': { runId: 's' },
+  'runs.issueUrl': { title: 's', body: 's' },
   'runs.flaky': { runs: 'n?' },
   'runs.latestResults': { names: 'sa' },
   'runs.openReport': { runId: 's', format: 's' },

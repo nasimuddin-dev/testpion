@@ -320,6 +320,7 @@ export * from './storage/workspace-watcher.js';
 export * from './storage/git-guard.js';
 export * from './security/secrets.js';
 export * from './git/git.js';
+export * from './git/issue.js';
 export * from './git/semantic.js';
 export * from './git/by-item.js';
 export * from './git/flow-diff.js';

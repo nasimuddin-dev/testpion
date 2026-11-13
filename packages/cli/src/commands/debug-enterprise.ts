@@ -16,6 +16,7 @@ import {
   cleanGateway,
   createShareBundle,
   latestFinishedRun,
+  issueDraft,
   reproBundle,
   describeDiff,
   describeFarxImport,
@@ -114,6 +115,7 @@ export function registerDebugEnterpriseCommands(program: Command): void {
     .argument('[file]', 'the session: a .har, .saz or .tpbundle (not with --run)')
     .option('--run <runId>', 'instead of a session file: a repro bundle of this run of the workspace (`latest`: the latest run), its failed HTTP steps as sent and answered with notes that say what failed; needs -w and --bundle')
     .option('--all-steps', 'with --run: every HTTP step of the run, the passing ones too')
+    .option('--issue [file.md]', 'with --run: an issue for the failures instead of (or beside) the bundle: a title and a Markdown text written from what the run kept (secrets masked), printed or written to the file; with --json also the link that opens a new issue on a GitHub, GitLab or Bitbucket remote. Nothing is sent')
     .option('--result <id...>', 'with --run: only these results')
     .option('-w, --workspace <nameOrPath>', 'with --run: the workspace')
     .option('--saz <file>', 'write a Fiddler session archive')
@@ -123,9 +125,23 @@ export function registerDebugEnterpriseCommands(program: Command): void {
     .option('--rules <file.json>', 'with --bundle: the rules file whose enabled rules travel inside (default: none)')
     .option('--dry-run', 'change nothing: say what would be written')
     .option(...JSON_RESULT_OPTION)
-    .action(async (file: string | undefined, o: { saz?: string; bundle?: string; har?: string; notes?: string; rules?: string; dryRun?: boolean; json?: boolean; run?: string; allSteps?: boolean; result?: string[]; workspace?: string }) => {
+    .action(async (file: string | undefined, o: { saz?: string; bundle?: string; har?: string; notes?: string; rules?: string; dryRun?: boolean; json?: boolean; run?: string; allSteps?: boolean; result?: string[]; workspace?: string; issue?: string | boolean }) => {
+      if (o.run && o.issue) {
+        if (!o.workspace) throw new CliError('Name the workspace of the run with -w', EXIT.CONFIG_ERROR);
+        const d = await withWorkspace(o.workspace, (store) => {
+          const id = o.run === 'latest' ? latestFinishedRun(store, () => true)?.runId : o.run;
+          if (!id) throw new CliError('This workspace has no finished run yet', EXIT.CONFIG_ERROR);
+          return issueDraft(store, id, { results: o.result, notes: o.notes });
+        });
+        const text = `# ${d.title}\n\n${d.body}`;
+        if (typeof o.issue === 'string' && !o.dryRun) writeFileSync(resolve(o.issue), text);
+        if (o.json) printJson({ ...d, ...(typeof o.issue === 'string' ? { file: resolve(o.issue) } : {}) });
+        else if (typeof o.issue === 'string') console.log(`${green(o.dryRun ? 'Would write' : 'Wrote')} ${resolve(o.issue)}${d.tracker ? dim(`  (--json gives the link that opens a new issue on ${d.tracker})`) : ''}`);
+        else process.stdout.write(text);
+        if (!o.bundle) return;
+      }
       if (o.run) {
-        if (!o.bundle) throw new CliError('A repro bundle is written with --bundle <file.tpbundle>', EXIT.CONFIG_ERROR);
+        if (!o.bundle) throw new CliError('A repro bundle is written with --bundle <file.tpbundle> (or pass --issue for an issue text)', EXIT.CONFIG_ERROR);
         if (!o.workspace) throw new CliError('Name the workspace of the run with -w', EXIT.CONFIG_ERROR);
         const r = await withWorkspace(o.workspace, (store) => {
           const id = o.run === 'latest' ? latestFinishedRun(store, () => true)?.runId : o.run;

@@ -99,6 +99,7 @@ export type MenuLabelKey =
   | 'triageWithAi'
   | 'exportReport'
   | 'reproBundle'
+  | 'createIssue'
   | 'openRequest'
   | 'openTrace'
   | 'openRun'
@@ -372,6 +373,8 @@ const LIST_ACTIONS = [
   { id: 'exportReport', group: 'share', label: 'exportReport', icon: 'download', kinds: ['run'] },
   // the run's failed HTTP steps as one masked file for a colleague (debugger/repro.ts)
   { id: 'reproBundle', group: 'share', label: 'reproBundle', icon: 'archive-restore', kinds: ['run'] },
+  // an issue for the run's failures, drafted from what the run kept (git/issue.ts): read, changed and sent by the person
+  { id: 'createIssue', group: 'tools', label: 'createIssue', icon: 'file-text', kinds: ['run'] },
   // history, traces, environments
   { id: 'openRequest', group: 'open', label: 'openRequest', icon: 'external-link', kinds: ['history'] },
   { id: 'openTrace', group: 'open', label: 'openTrace', icon: 'file-text', kinds: ['history'] },

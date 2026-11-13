@@ -50,6 +50,10 @@ import {
   setExposure,
   type FlowExposure,
   reproBundle,
+  issueDraft,
+  newIssueUrl,
+  gitRemoteUrl,
+  strictHarRedactor,
 } from '@testpion/core';
 import type { Backend, Handlers, EvalRunParams } from '../backend.js';
 import { previewTests } from '../test-preview.js';
@@ -220,6 +224,14 @@ export function testingHandlers(be: Backend): Handlers {
       const r = await reproBundle(be.ws, runId, { all: all === true, redactor: be.logger.redactor });
       const saved = await be.saveOrDownload(r.name, [{ name: 'TestPion bundle', extensions: ['tpbundle'] }], (dest) => writeFileSync(dest, r.bytes), () => r.bytes);
       return { ...saved, steps: r.steps.length, skipped: r.skipped };
+    },
+    /** An issue for the run's failures: a title, a Markdown text (secrets masked) and, for a GitHub, GitLab or Bitbucket remote, the link to its new-issue page. Nothing is sent. */
+    'runs.issue': ({ runId }: { runId: string }) => issueDraft(be.ws, runId, { redactor: be.logger.redactor }),
+    /** The new-issue link for a title and text as the person left them (masked again: an edit may have pasted a secret). */
+    'runs.issueUrl': async ({ title, body }: { title: string; body: string }) => {
+      const remote = await gitRemoteUrl(be.ws.root).catch(() => undefined);
+      const red = strictHarRedactor(be.logger.redactor);
+      return (remote && newIssueUrl(remote, red.redactString(String(title)), red.redactString(String(body)))) || {};
     },
     /** The workspace report (activity, collection health, monitors, runs) as one HTML file, saved where the user picks. */
     'report.workspace': async ({ days, tzOffsetMin }: { days?: number; tzOffsetMin?: number } = {}) => {

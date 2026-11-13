@@ -18,6 +18,12 @@
 - Secrets are masked the strict way (authorization and cookie headers, tokens in URLs and bodies): the bundle shows what happened, it does not carry the credentials to do it again.
 - `testpion debug-export --run <runId|latest> -w <ws> --bundle repro.tpbundle` (with `--all-steps` for the passing steps too); for agents, `debugger_session` with `action: "bundle"` and `run`.
 
+### An issue from a failed run
+
+- **Create issue…** in a run's menu drafts an issue for the run's failures: a title from the first failure and a Markdown text with each failed step, its failed checks (expected and actual) and its errors. No AI model is involved, and secrets are masked.
+- You read and change the text first. *Copy as Markdown* puts it on the clipboard for any tracker; when the workspace's remote is GitHub, GitLab or Bitbucket, a button opens that site's new-issue page with the title and text filled in. TestPion sends nothing itself.
+- `testpion debug-export --run <runId|latest> -w <ws> --issue [file.md]` prints or writes the same text (`--json` adds the link).
+
 ### API catalog
 
 - **A catalog of every API in the workspace**: for each collection, its requests and where they go, the API definition it implements and how many of that definition's operations have a request, the environments that define its variables, its monitors with their latest result, the test files and flows that run it, and its owners. Open it with the book button in the Collections header or from the command palette; every name is a link to the item.

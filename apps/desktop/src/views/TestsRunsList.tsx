@@ -85,8 +85,9 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
                 ci: () => void runInCi(r.id),
                 ...(r.failed + r.errors > 0 ? { triage: () => startAiAnalysis({ kind: 'triage', runId: r.id, title: r.name }) } : {}),
                 reproBundle: () => void saveReproBundle(r.id),
+                createIssue: () => useApp.getState().set({ issueFor: { runId: r.id } }),
               },
-              disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run', reproBundle: 'Nothing failed in this run: there is nothing to reproduce' },
+              disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run', reproBundle: 'Nothing failed in this run: there is nothing to reproduce', createIssue: 'Nothing failed in this run: there is nothing to report' },
             })}
           >
             <span className="flex-1 min-w-0">

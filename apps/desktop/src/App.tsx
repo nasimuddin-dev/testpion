@@ -65,6 +65,7 @@ const ExportBundleDialog = lazy(() => import('./components/ExportBundleDialog'))
 const ImportBundleDialog = lazy(() => import('./components/ImportBundleDialog'));
 const CiDialog = lazy(async () => ({ default: (await import('./components/CiDialog')).CiDialog }));
 const CatalogDialog = lazy(async () => ({ default: (await import('./components/CatalogDialog')).CatalogDialog }));
+const IssueDialog = lazy(async () => ({ default: (await import('./components/IssueDialog')).IssueDialog }));
 const UsesDialog = lazy(async () => ({ default: (await import('./components/UsesDialog')).UsesDialog }));
 const AskSearchDialog = lazy(async () => ({ default: (await import('./components/ai/AskSearchDialog')).AskSearchDialog }));
 const FlowGenerateDialog = lazy(async () => ({ default: (await import('./components/ai/FlowGenerateDialog')).FlowGenerateDialog }));
@@ -234,6 +235,7 @@ export default function App() {
   const ci = useApp((s) => s.ci);
   const usesOf = useApp((s) => s.usesOf);
   const catalogOpen = useApp((s) => s.catalogOpen);
+  const issueFor = useApp((s) => s.issueFor);
   const flowGenerate = useApp((s) => s.flowGenerate);
   const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
@@ -664,6 +666,14 @@ export default function App() {
             <CatalogDialog />
           </Suspense>,
           close({ catalogOpen: false }),
+        )}
+      {issueFor &&
+        guard(
+          'issue dialog',
+          <Suspense fallback={null}>
+            <IssueDialog />
+          </Suspense>,
+          close({ issueFor: undefined }),
         )}
       {usesOf &&
         guard(

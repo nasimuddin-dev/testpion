@@ -25,6 +25,7 @@ import { connectionProperties, diffForAgent, exchangesFromFile, gatewayFromArgs 
 import { exchangesToSaz } from '../../debugger/saz-export.js';
 import { createShareBundle } from '../../debugger/bundle.js';
 import { reproBundle } from '../../debugger/repro.js';
+import { issueDraft } from '../../git/issue.js';
 import { rulesFromFarx, describeFarxImport } from '../../debugger/farx.js';
 import { planLaunch, startLaunch, LAUNCH_KINDS, type LaunchKind } from '../../debugger/launcher.js';
 import { strictHarRedactor } from '../../debugger/har.js';
@@ -393,7 +394,9 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           if (!d.store) throw new ApsError('ConfigurationError', 'A repro bundle of a run needs a workspace');
           const r = await reproBundle(d.store, a.run, { notes: typeof a.notes === 'string' ? a.notes : undefined, redactor: d.redactor });
           writeFileSync(file, r.bytes);
-          return { saved: file, masked: true, run: r.run, steps: r.steps, skipped: r.skipped };
+          // an issue for the same failures (title, Markdown, a new-issue link for a GitHub/GitLab/Bitbucket remote): nothing is sent
+          const issue = await issueDraft(d.store, a.run, { redactor: d.redactor }).then(({ title, body, url }) => ({ title, body, ...(url ? { url } : {}) }), () => undefined);
+          return { saved: file, masked: true, run: r.run, steps: r.steps, skipped: r.skipped, ...(issue ? { issue } : {}) };
         }
         if (a.action === 'bundle') {
           const { bytes, manifest } = await createShareBundle({ name: String(a.path).replace(/^.*[\\/]/, '').replace(/\.tpbundle$/i, ''), exchanges: session, rules: a.with_rules === false ? [] : rules.filter((r) => r.enabled), notes: typeof a.notes === 'string' ? a.notes : undefined, redactor: red, state: { running: !!proxy, port: proxy?.port, systemProxy: !!systemProxy, networkSpeed: speed ? describeNetworkSpeed(speed) : undefined } });

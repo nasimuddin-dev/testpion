@@ -227,6 +227,8 @@ interface AppState {
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;
+  /** The "Create issue" dialog of a failed run. */
+  issueFor?: { runId: string };
   /** The API catalog dialog (every API of the workspace with what belongs to it). */
   catalogOpen?: boolean;
   /** The "Uses and used by" dialog of an item. */
