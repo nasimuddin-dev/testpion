@@ -45,6 +45,18 @@ Dynamic values (`{{$uuid}}`, `{{$timestamp}}` …) and `{{$env.NAME}}` count as 
 
 A request whose host is a variable without a value (`{{baseurl}}/users` when no scope defines `baseurl`) is not sent: it could only fail with "ENOTFOUND {{baseurl}}". The error names the variable and the defined one it most likely meant (`{{baseUrl}}`: names are case-sensitive), and **Add baseurl to …** opens the current environment with a new row for it, ready for its value. The CLI and the MCP server report the same error, with the same suggestions.
 
+## Variable types {#types}
+
+A variable is text unless you say otherwise. In the **Type** column of an environment, of the workspace variables and of a collection's variables you can make it a **Number**, a **Boolean** or **JSON**.
+
+- **A value that does not fit is shown at once**: the cell turns red and says why (`not a number: "abc"`). The same problem appears in Problems and in `testpion attention`, so a wrong value is found before a run, not in the middle of one.
+- **Scripts get the real value.** `tp.environment.get('port')` is the number `8080`, `tp.environment.get('debug')` is `true`, and a JSON variable is the parsed object: no `Number(…)` or `JSON.parse(…)` in every script.
+- **`{{name}}` writes the value as JSON does**, so `{"port": {{port}}, "tags": {{tags}}}` is valid JSON for a number and a JSON variable.
+- The file still keeps the value as text (with `"valueType": "number"` beside it), so git diffs stay readable and an older TestPion reads the variable as before.
+- An empty value and a value with a `{{reference}}` in it are never a problem: they get their type when they are resolved.
+
+On the command line: `testpion env set Staging port=8080 --type port=number`. A value that does not fit is refused. An agent that passes a number, a boolean or an object to `set_environment_variable` makes the variable that type.
+
 ## Find usages and rename
 
 **Usages** in an environment's toolbar (or **Find variable usages** in the command palette, Ctrl+K) shows where a variable is used and defined: `{{name}}` in URLs, parameters, headers, bodies, auth and assertions, `tp.environment.get('name')` and the like in scripts, environments, collection, folder and workspace variables, and test files. Click a request to open it.

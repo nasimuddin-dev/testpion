@@ -4,7 +4,7 @@ import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef, collectionOwners, ownedBy } from '@testpion/core';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef, collectionOwners, ownedBy, isVariableType, type VariableType } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, warnUnknownGroup, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
@@ -876,11 +876,12 @@ export function registerDataCommands(program: Command): void {
     });
   envCmd
     .command('set')
-    .description('set plain variables of an environment (key=value …); secret variables are set in the app')
+    .description('set plain variables of an environment (key=value …); a secret variable is set with `testpion vault set` or in the app')
     .argument('<environment>', 'environment name or id')
     .argument('<assignments...>', 'key=value pairs')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--create', 'create the environment if it does not exist')
+    .option('--type <key=type...>', 'the type of a variable set here: string (text, the default), number, boolean or json; a value that does not fit is refused')
     .option('--also-in <environments...>', 'also add them to these environments where they are missing (empty; --copy for the same values)')
     .option('--copy', 'with --also-in: the same values')
     .option('--json', 'print the variable names as JSON')
@@ -892,7 +893,13 @@ export function registerDataCommands(program: Command): void {
           if (i <= 0) throw new CliError(`Expected key=value, got "${p}"`, EXIT.CONFIG_ERROR);
           values[p.slice(0, i)] = p.slice(i + 1);
         }
-        const env = setEnvironmentVariables(store, ref, values, { create: !!o.create });
+        const types: Record<string, VariableType> = {};
+        for (const p of ((o.type as string[] | undefined) ?? []).flatMap((x) => x.split(','))) {
+          const [key, type] = p.split('=').map((x) => x.trim());
+          if (!key || !isVariableType(type)) throw new CliError(`Expected --type key=string|number|boolean|json, got "${p}"`, EXIT.CONFIG_ERROR);
+          types[key] = type;
+        }
+        const env = setEnvironmentVariables(store, ref, values, { create: !!o.create, types });
         const also = o.alsoIn?.length ? await addVariablesToEnvironments(store, env.id, Object.keys(values), (o.alsoIn as string[]).flatMap((x) => x.split(',')).map((x) => x.trim()).filter(Boolean), { copy: !!o.copy }) : undefined;
         if (o.json) printJson({ environment: env.name, set: Object.keys(values), ...(also ? { also } : {}) });
         else {

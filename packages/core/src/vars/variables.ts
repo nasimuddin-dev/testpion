@@ -1,4 +1,4 @@
-import { templateRegex } from '@testpion/shared';
+import { templateRegex, typedVariableValue, type VariableType } from '@testpion/shared';
 import type { Redactor } from '../util/redact.js';
 import { dynamicValue } from './dynamic.js';
 
@@ -62,12 +62,13 @@ export class VariableScope {
     return c;
   }
 
-  setScope(scope: ScopeName, values: Record<string, unknown> | Array<{ key: string; value: unknown; enabled?: boolean; secret?: boolean }>): void {
+  setScope(scope: ScopeName, values: Record<string, unknown> | Array<{ key: string; value: unknown; enabled?: boolean; secret?: boolean; valueType?: VariableType }>): void {
     const m = new Map<string, unknown>();
     if (Array.isArray(values)) {
       for (const v of values) {
         if (v.enabled === false || !v.key) continue;
-        m.set(v.key, v.value);
+        // a typed variable is its real value here (a number, a boolean, parsed JSON): scripts get that, {{name}} writes it as JSON does
+        m.set(v.key, typedVariableValue(v.valueType, v.value));
         if (v.secret) this.markSecret(v.key, v.value);
       }
     } else {

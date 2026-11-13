@@ -4,7 +4,7 @@
  * latest response failed, flaky tests. Names and counts only. The app's Problems panel (WF-03), Home's "Needs
  * attention", `what_needs_attention` and `testpion problems` are this one list.
  */
-import { decodeJwt, matchEnvironment, type ItemRef } from '@testpion/shared';
+import { decodeJwt, matchEnvironment, variableTypeProblem, type ItemRef, type VariableType } from '@testpion/shared';
 import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
 import { listDeprecations } from './deprecations.js';
@@ -188,6 +188,15 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
   // files that can't be read: nothing in them works until they are fixed
   for (const e of store.listEnvironments())
     if (e.problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Environment "${e.name}" can't be read: ${e.problem}`, ref: { kind: 'environment', environmentId: e.id } });
+  // a typed variable whose value does not fit its type: a script would get text where it expects a number
+  const typed = (where: string, vars: ReadonlyArray<{ key: string; value: string; enabled?: boolean; secret?: boolean; valueType?: VariableType }>, ref: (key: string) => ItemRef) => {
+    for (const v of vars) {
+      const problem = v.enabled === false || v.secret ? undefined : variableTypeProblem(v.valueType, v.value);
+      if (problem) out.push({ kind: 'file', severity: 'medium', group: 'Workspace files', type: 'warning', message: `${where}: the variable ${v.key} is a ${v.valueType === 'json' ? 'JSON value' : v.valueType} but its value is ${problem}`, ref: ref(v.key) });
+    }
+  };
+  for (const e of store.listEnvironments()) if (!e.problem) typed(`Environment "${e.name}"`, e.variables, (key) => ({ kind: 'variable', key, environmentId: e.id }));
+  typed('Workspace variables', store.workspace.variables ?? [], (key) => ({ kind: 'variable', key }));
   // a shared folder that gives nothing (not cloned here, moved, no such kind): its environments silently went missing
   for (const p of sharedSourceProblems(store))
     out.push({ kind: 'file', severity: 'medium', group: 'Workspace files', type: 'warning', message: `workspace.json reads ${p.kinds.join(' and ')} from ${p.path}, which ${p.problem}`, ref: { kind: 'environment', scope: 'workspace' } });

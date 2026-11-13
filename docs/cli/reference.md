@@ -90,7 +90,7 @@ testpion debugger diff <before> <after> [--ignore-query] [--include-size] [--tim
 testpion debugger open <bundle.tpbundle> [--out session.har] [--json]   What a share bundle holds: notes, environment, rules, exchanges
 testpion debug certificate [--install | --remove] [--yes] [--dry-run] [--json]   The root certificate HTTPS decryption signs with: where it is, its fingerprint, whether this computer trusts it (`known: false` when it cannot tell); --install and --remove change the trust store and need --yes when the command cannot ask
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
-testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app); set --also-in <envs> [--copy] adds them to others where missing
+testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (a secret: `testpion vault set`, or the app); set --type key=number|boolean|json|string gives a variable a type; set --also-in <envs> [--copy] adds them to others where missing
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere
 testpion openapi-diff <old> <new>   List breaking changes between two OpenAPI versions (--fail-on-breaking for CI)
 testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undeclared path parameters, duplicate operationIds …

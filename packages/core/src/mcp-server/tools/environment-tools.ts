@@ -1,3 +1,4 @@
+import type { VariableType } from '@testpion/shared';
 import { createEngineContext } from '../../engine.js';
 import { ApsError } from '../../errors.js';
 import { compareRequestAcrossEnvironments } from '../../runner/env-request-compare.js';
@@ -15,10 +16,13 @@ export function environmentTools(d: ModuleToolDeps): Tool[] {
       name: 'set_environment_variable',
       write: true,
       description: 'Set plain (non-secret) variables of an environment, e.g. { "baseUrl": "https://staging.example.com" }; `create` makes the environment if needed; `alsoIn` adds them to other environments where they are missing (empty, or the same value with `copyValues`). Secret variables are refused: the user sets those in the app.',
-      inputSchema: { type: 'object', properties: { environment: str('Environment name or id'), values: { type: 'object', additionalProperties: { type: 'string' }, description: 'key → value' }, create: { type: 'boolean' }, alsoIn: { type: 'array', items: { type: 'string' }, description: 'Other environments to add them to where they are missing' }, copyValues: { type: 'boolean', description: 'With alsoIn: the same values (default: empty)' } }, required: ['environment', 'values'] },
+      inputSchema: { type: 'object', properties: { environment: str('Environment name or id'), values: { type: 'object', description: 'key → value; a number, boolean or object value makes the variable that type' }, create: { type: 'boolean' }, alsoIn: { type: 'array', items: { type: 'string' }, description: 'Environments to add them to where missing' }, copyValues: { type: 'boolean', description: 'With alsoIn: copy the values' } }, required: ['environment', 'values'] },
       run: async (a) => {
-        const values = Object.fromEntries(Object.entries((a.values ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)]));
-        const env = setEnvironmentVariables(store, String(a.environment), values, { create: a.create === true });
+        const given = Object.entries((a.values ?? {}) as Record<string, unknown>);
+        const values = Object.fromEntries(given.map(([k, v]) => [k, v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v)]));
+        // a value that is not text says its type: 8080 is a number variable, true a boolean, { … } JSON
+        const types = Object.fromEntries(given.flatMap(([k, v]): Array<[string, VariableType]> => (typeof v === 'number' ? [[k, 'number']] : typeof v === 'boolean' ? [[k, 'boolean']] : v !== null && typeof v === 'object' ? [[k, 'json']] : [])));
+        const env = setEnvironmentVariables(store, String(a.environment), values, { create: a.create === true, types });
         const also = Array.isArray(a.alsoIn) && a.alsoIn.length ? await addVariablesToEnvironments(store, env.id, Object.keys(values), a.alsoIn.map(String), { copy: a.copyValues === true }) : undefined;
         return { environment: env.name, set: Object.keys(values), ...(also ? { also } : {}) };
       },

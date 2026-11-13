@@ -12,6 +12,12 @@
 - **Uses and used by…** in an item's menu lists what the item names in the workspace (API definitions, datasets, protos, mocks, script packages, MCP servers, environments, its collection) and what names it (tests, flows, monitors, calls, collections). The same reading as *Export with everything it uses*; nothing runs.
 - `testpion item uses <ref> [--json]` and the MCP tool `item_uses` answer the same: check before you delete or rename something.
 
+### Variable types
+
+- **A variable can be a Number, a Boolean or JSON**, not only text: the new Type column in an environment, the workspace variables and a collection's variables. A value that does not fit turns red and says why, and is listed in Problems and `testpion attention` before any run.
+- **Scripts get the real value**: `tp.environment.get('port')` is the number 8080, a JSON variable is the parsed object. `{{name}}` writes a typed value the way JSON does.
+- `testpion env set <env> port=8080 --type port=number`; the MCP tool `set_environment_variable` takes numbers, booleans and objects as values. The file keeps the value as text with its type beside it, so older versions and git diffs are unaffected.
+
 ### Secrets for the command line
 
 - **`testpion vault`**: a secret store the command line can write to, and the app reads too. `vault set` takes the value from standard input or an environment variable (never as an argument), `vault list` prints names only, `vault status` says whether it opens here. Every value is encrypted on its own; the key is kept by the operating system (Windows DPAPI, the macOS Keychain, the Linux Secret Service) or derived from `TESTPION_VAULT_PASSPHRASE` in CI and containers.

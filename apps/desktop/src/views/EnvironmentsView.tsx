@@ -248,7 +248,7 @@ export function EnvironmentsView() {
     if (!draft) return;
     await attempt(async () => {
       // secret values go to the OS credential store; only the key is written to the workspace file
-      const variables = rows.map((r) => ({ key: r.key, value: r.secret ? '' : r.value, secret: r.secret, enabled: r.enabled }));
+      const variables = rows.map((r) => ({ key: r.key, value: r.secret ? '' : r.value, secret: r.secret, enabled: r.enabled, ...(r.valueType ? { valueType: r.valueType } : {}) }));
       const secrets = Object.fromEntries(rows.filter((r) => r.secret && r.value).map((r) => [r.key, r.value]));
       // a variable switched to secret keeps its previous plain value as the secret
       for (const r of rows) {
@@ -495,11 +495,12 @@ export function EnvironmentsView() {
                 <KeyValueEditor
                   rows={rows}
                   allowSecret
+                  allowType
                   secretStatus={secretStatus}
                   keyPlaceholder="Variable"
                   onChange={(next) => {
                     setSecretValues(Object.fromEntries(next.filter((r) => r.secret).map((r) => [r.key, r.value])));
-                    setDraft({ ...draft, variables: next.map((r) => ({ key: r.key, value: r.secret ? '' : r.value, secret: r.secret, enabled: r.enabled })) });
+                    setDraft({ ...draft, variables: next.map((r) => ({ key: r.key, value: r.secret ? '' : r.value, secret: r.secret, enabled: r.enabled, ...(r.valueType ? { valueType: r.valueType } : {}) })) });
                   }}
                 />
                 {unused.length > 0 && (
@@ -549,7 +550,7 @@ export function EnvironmentsView() {
               collections={colVarCount}
               onCollections={() => setScope('collection')}
             />
-            <KeyValueEditor rows={wsVars} onChange={setWsVars} keyPlaceholder="Variable" allowSecret />
+            <KeyValueEditor rows={wsVars} onChange={setWsVars} keyPlaceholder="Variable" allowSecret allowType />
             <div>
               <Button
                 variant="primary"

@@ -103,6 +103,7 @@ export * from './git/owners.js';
 export { environmentLabel, groupEnvironments, environmentsOfGroup, matchEnvironment, nameIsShared, environmentRef, type GroupedEnvironment } from '@testpion/shared';
 export * from './openapi/deprecated-calls.js';
 export { deprecationOf, type DeprecationInfo } from '@testpion/shared';
+export { VARIABLE_TYPES, isVariableType, typedVariableValue, variableTypeProblem, type VariableType } from '@testpion/shared';
 export * from './mock/mock-state.js';
 export * from './report/monitors-status.js';
 export * from './runner/prompt-versions.js';

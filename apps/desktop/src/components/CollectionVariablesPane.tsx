@@ -138,7 +138,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
               </Button>
             </div>
             <p className="text-xs text-muted">Used by this collection's requests. A collection variable overrides an environment, workspace or global variable with the same name, and is overridden by request variables and by variables a script sets while a run is going.</p>
-            <KeyValueEditor rows={rows} onChange={setRows} keyPlaceholder="Variable" />
+            <KeyValueEditor rows={rows} onChange={setRows} keyPlaceholder="Variable" allowType />
           </>
         )}
       </div>

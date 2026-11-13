@@ -1,5 +1,6 @@
 import { Eye, EyeOff, Lock, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { VARIABLE_TYPES, variableTypeProblem, type VariableType } from '@testpion/shared';
 import type { KeyValue } from '../types';
 import { LinkButton, cx, Textarea } from './ui';
 import { VarInput } from './VarInput';
@@ -14,6 +15,7 @@ export function KeyValueEditor({
   keyPlaceholder = 'Key',
   valuePlaceholder = 'Value',
   allowSecret,
+  allowType,
   allowFile,
   suggestions,
   secretStatus,
@@ -26,6 +28,8 @@ export function KeyValueEditor({
   keyPlaceholder?: string;
   valuePlaceholder?: string;
   allowSecret?: boolean;
+  /** The rows are variables: each may have a type (Text, Number, Boolean, JSON); a value that does not fit says so. */
+  allowType?: boolean;
   allowFile?: boolean;
   suggestions?: string[];
   secretStatus?: Record<string, boolean>;
@@ -82,6 +86,7 @@ export function KeyValueEditor({
             <th className="font-medium px-1.5 py-1 w-[35%]">{keyPlaceholder}</th>
             <th className="font-medium px-1.5 py-1">{valuePlaceholder}</th>
             {allowFile && <th className="w-16 font-medium">Type</th>}
+            {allowType && <th className="w-24 font-medium px-1.5">Type</th>}
             {allowSecret && <th className="w-16 font-medium">Secret</th>}
             <th className="w-8" />
           </tr>
@@ -91,6 +96,7 @@ export function KeyValueEditor({
             const isNew = i === rows.length;
             const id = allIds[i]!;
             const masked = r.secret && !reveal[id];
+            const typeProblem = allowType && r.enabled !== false ? variableTypeProblem(r.valueType, r.value) : undefined;
             return (
               <tr key={id} className={cx('border-t border-line group', r.enabled === false && 'opacity-50')}>
                 <td className="text-center">
@@ -127,6 +133,25 @@ export function KeyValueEditor({
                       <select className="cell-input text-xs" aria-label={`Kind of ${r.key || 'field'}`} value={r.kind ?? 'text'} onChange={(e) => update(i, { kind: e.target.value as 'text' | 'file' })}>
                         <option value="text">Text</option>
                         <option value="file">File</option>
+                      </select>
+                    )}
+                  </td>
+                )}
+                {allowType && (
+                  <td className={cx('border-l border-line', typeProblem && 'bg-bad/10')} title={typeProblem ? `The value is ${typeProblem}` : undefined} data-type-problem={typeProblem ? r.key : undefined}>
+                    {!isNew && (
+                      <select
+                        className={cx('cell-input text-xs', typeProblem && 'text-bad')}
+                        aria-label={`Type of ${r.key || 'variable'}`}
+                        aria-invalid={typeProblem ? true : undefined}
+                        value={r.valueType ?? 'string'}
+                        onChange={(e) => update(i, { valueType: e.target.value === 'string' ? undefined : (e.target.value as VariableType) })}
+                      >
+                        {VARIABLE_TYPES.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </td>

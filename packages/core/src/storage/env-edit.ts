@@ -3,7 +3,7 @@ import type { WorkspaceStore } from './workspace.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { secretKeys, type SecretStore } from './secrets.js';
-import { environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment } from '@testpion/shared';
+import { environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment , variableTypeProblem, type VariableType } from '@testpion/shared';
 
 /**
  * Set or remove plain (non-secret) variables of an environment from the CLI or an AI agent. Secret
@@ -83,7 +83,7 @@ export function freeEnvironmentId(store: Pick<WorkspaceStore, 'listEnvironments'
 /** A variable name: letters, digits, _ . $ - */
 const VARIABLE_NAME = /^[\w.$-]+$/;
 
-function applyEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets?: SecretStore }): { env: Environment; secretValues: Array<[string, string]> } {
+function applyEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets?: SecretStore; types?: Record<string, VariableType> }): { env: Environment; secretValues: Array<[string, string]> } {
   let env = findEnvironment(store, ref);
   if (!env) {
     if (!opts.create) throw new ApsError('ValidationError', `No environment "${ref}". Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`, { suggestions: ['Pass --create (create: true) to make it.'] });
@@ -103,9 +103,16 @@ function applyEnvironmentVariables(store: WorkspaceStore, ref: string, values: R
       secretValues.push([secretKeys.envVar(env.id, key), value]);
       continue;
     }
-    if (i >= 0) variables[i] = { ...variables[i]!, value, enabled: true };
-    else variables.push({ key, value, enabled: true });
+    // a type given with the value (`env set --type port=number`, a number passed by an agent) is kept; without one the variable keeps the type it has
+    const type = opts.types?.[key] ?? (i >= 0 ? variables[i]!.valueType : undefined);
+    const problem = variableTypeProblem(type, value);
+    if (problem) throw new ApsError('ValidationError', `"${key}" is a ${type === 'json' ? 'JSON value' : type}, and the value is ${problem}`, { suggestions: ['Give a value of that type, or change the type (`--type ' + key + '=string`, the Type column in the app).'] });
+    const { valueType: _was, ...kept } = i >= 0 ? variables[i]! : { key };
+    const next = { ...kept, key, value, enabled: true, ...(type && type !== 'string' ? { valueType: type } : {}) };
+    if (i >= 0) variables[i] = next;
+    else variables.push(next);
   }
+  for (const key of Object.keys(opts.types ?? {})) if (!(key in values)) throw new ApsError('ValidationError', `A type was given for "${key}" but no value: set them together`);
   // only secret values: the environment file does not change
   const onlySecrets = secretValues.length > 0 && secretValues.length === Object.keys(values).length;
   return { env: onlySecrets ? env : store.saveEnvironment({ ...env, variables }), secretValues };
@@ -115,9 +122,9 @@ function applyEnvironmentVariables(store: WorkspaceStore, ref: string, values: R
  * Set variables of an environment. Without `secrets`, a secret variable is refused; with the app's secret store,
  * its value is stored there (the environment file never holds it) and the result is a promise.
  */
-export function setEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts?: { create?: boolean }): Environment;
-export function setEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets: SecretStore }): Promise<Environment>;
-export function setEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets?: SecretStore } = {}): Environment | Promise<Environment> {
+export function setEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts?: { create?: boolean; types?: Record<string, VariableType> }): Environment;
+export function setEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets: SecretStore; types?: Record<string, VariableType> }): Promise<Environment>;
+export function setEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets?: SecretStore; types?: Record<string, VariableType> } = {}): Environment | Promise<Environment> {
   const { env, secretValues } = applyEnvironmentVariables(store, ref, values, opts);
   if (!opts.secrets) return env;
   const secrets = opts.secrets;
