@@ -46,7 +46,7 @@ describe('CLI: trash --help', () => {
     const r = cli('trash', '--help');
     expect(r.status, r.err).toBe(0);
     expect(r.out.replace(/\s+/g, ' ')).toContain(`recently deleted ${trashKindsText()} (kept 30 days)`);
-    expect(trashKindsText()).toBe('collections, environments, datasets, API definitions and MCP servers');
+    expect(trashKindsText()).toBe('collections, gRPC calls, connections, environments, test files, flows, datasets, API definitions, MCP servers, AI providers, prompts, load tests, evaluations, monitors and RAG targets');
     // the CLI reference says the same
     expect(readFileSync(resolve('docs', 'cli', 'reference.md'), 'utf8')).toContain(`Recently deleted ${trashKindsText()} (30 days)`);
   });

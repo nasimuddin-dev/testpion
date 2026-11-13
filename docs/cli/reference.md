@@ -78,7 +78,7 @@ testpion export <c> -f http    Write a collection as an .http file (REST Client,
 testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 3.0 document
 testpion openapi-ops <spec>    List an OpenAPI document's operations by tag (--json: schemas and a request per operation)
 testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
-testpion vault status|list|set|delete   The secret store the command line can write to (the app reads it too): `vault set <name> [-e <environment> | --global | --provider] [-w <ws>] [--from-env VAR]` reads the value from standard input
+testpion secrets vault status|list|set|delete   The secret store the command line can write to (the app reads it too): `secrets vault set <name> [-e <environment> | --global | --provider] [-w <ws>] [--from-env VAR]` reads the value from standard input
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
 testpion debug (or debugger) [capture] [--throttle modem|edge|slow-3g|3g|slow-4g|custom [--down-kbps n --up-kbps n --latency-ms n]] [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [--system-proxy --yes] [--dry-run] [-w workspace] [--json] [--save-collection [name] | --to <collection>] [--group host|path|none]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
 testpion debugger remap [host=target] [--keep-host] [--scheme auto|http|https] [--list] [--remove <host>] [--import-hosts [file]] [--rules file] [--dry-run] [--json]   Host remapping rules of a rules file (default: the workspace's debugger/rules.json); the hosts-file entries are imported switched off
@@ -92,7 +92,7 @@ testpion debugger diff <before> <after> [--ignore-query] [--include-size] [--tim
 testpion debugger open <bundle.tpbundle> [--out session.har] [--json]   What a share bundle holds: notes, environment, rules, exchanges
 testpion debug certificate [--install | --remove] [--yes] [--dry-run] [--json]   The root certificate HTTPS decryption signs with: where it is, its fingerprint, whether this computer trusts it (`known: false` when it cannot tell); --install and --remove change the trust store and need --yes when the command cannot ask
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
-testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (a secret: `testpion vault set`, or the app); set --type key=number|boolean|json|string gives a variable a type; set --also-in <envs> [--copy] adds them to others where missing
+testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (a secret: `testpion secrets vault set`, or the app); set --type key=number|boolean|json|string gives a variable a type; set --also-in <envs> [--copy] adds them to others where missing
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere
 testpion openapi-diff <old> <new>   List breaking changes between two OpenAPI versions (--fail-on-breaking for CI)
 testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undeclared path parameters, duplicate operationIds …
@@ -135,7 +135,7 @@ testpion flows -w             The flows exposed as MCP tools (test files and sui
 testpion serve flows -w       Run flows behind their webhooks (webhook: blocks): POST JSON to the path, get the flow's output (--port 4020, --host, -e env, --jsonl)
 testpion scripts convert --to tp|pm -w   Rewrite collection scripts between Postman's pm.* and TestPion's tp.*, or --from bruno|insomnia|thunder|hoppscotch to tp.* (--file for one script, --lift-tests, --dry-run)
 testpion wait-for <url>       Wait until a URL answers (the health check before integration tests); exit 3 when it never does
-testpion trash list|restore|empty -w  Recently deleted collections, environments, datasets, API definitions and MCP servers (30 days)
+testpion trash list|restore|empty -w  Recently deleted collections, gRPC calls, connections, environments, test files, flows, datasets, API definitions, MCP servers, AI providers, prompts, load tests, evaluations, monitors and RAG targets (30 days)
 testpion history list|stats|diff|test|export-har -w  Response history of saved requests; response times; compare two responses; a test across runs; HAR export
 testpion workspace list|create|rename|delete|export   Manage workspaces (see Workspaces); export writes <name>.testpion.json, secrets replaced by {{variables}}
 testpion git setup|check|hook install -w   Make a workspace git-ready; find secrets before a commit (check --staged scans the staged files, what a commit would publish: exit 1 on a finding); a pre-commit hook
@@ -221,7 +221,7 @@ The app's settings (the ones in Settings in the window, per computer) for script
 | `TESTPION_HOME` | The app's data folder (settings, workspaces, secrets) instead of the default one |
 | `TESTPION_NON_INTERACTIVE=1` | Never wait for input (also set by `CI`) |
 | `TESTPION_SECRET_<NAME>` | The value of a secret variable (it wins over the vault) |
-| `TESTPION_VAULT_PASSPHRASE` | The passphrase of the vault (`testpion vault`) where no OS keyring is available: CI, containers |
+| `TESTPION_VAULT_PASSPHRASE` | The passphrase of the vault (`testpion secrets vault`) where no OS keyring is available: CI, containers |
 | `TESTPION_AI_PROVIDER`, `TESTPION_AI_MODEL` (`_SMALL`, `_LARGE`), `TESTPION_AI_LOCAL_ONLY` | The AI model the CLI and CI use |
 | `TESTPION_NO_PROXY`, `TESTPION_USE_SYSTEM_CA`, `TESTPION_CA_FILE` | Outbound proxy off, the OS certificate store, extra CA certificates |
 | `TESTPION_BLOCK_PRIVATE_NETWORKS`, `TESTPION_ALLOW_HOSTS`, `TESTPION_ALLOW_PROCESSES` | The network policy for shared use ([privacy](/security/privacy)) |

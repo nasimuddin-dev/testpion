@@ -38,7 +38,7 @@
 
 ### Secrets for the command line
 
-- **`testpion vault`**: a secret store the command line can write to, and the app reads too. `vault set` takes the value from standard input or an environment variable (never as an argument), `vault list` prints names only, `vault status` says whether it opens here. Every value is encrypted on its own; the key is kept by the operating system (Windows DPAPI, the macOS Keychain, the Linux Secret Service) or derived from `TESTPION_VAULT_PASSPHRASE` in CI and containers.
+- **`testpion secrets vault`**: a secret store the command line can write to, and the app reads too. `secrets vault set` takes the value from standard input or an environment variable (never as an argument), `secrets vault list` prints names only, `secrets vault status` says whether it opens here. Every value is encrypted on its own; the key is kept by the operating system (Windows DPAPI, the macOS Keychain, the Linux Secret Service) or derived from `TESTPION_VAULT_PASSPHRASE` in CI and containers.
 - The CLI reads `TESTPION_SECRET_*` first, then the vault, so pipelines keep working as they are. A run never writes the vault.
 - **`testpion git fix-secrets --apply`** now moves secrets typed into staged files to the vault and writes the `{{variables}}`, as *Fix all* does in the app. Before, the command line could only print the plan.
 

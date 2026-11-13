@@ -3,12 +3,14 @@ import { secretKeys, VAULT_PASSPHRASE_ENV } from '@testpion/core';
 import { bold, CliError, cliVault, dim, EXIT, green, JSON_RESULT_OPTION, printJson, red, withWorkspace } from '../shared.js';
 
 /**
- * `testpion vault status|list|set|delete`: the secret store the command line can write to (packages/core/src/storage/vault.ts).
+ * `testpion secrets vault status|list|set|delete`: the secret store the command line can write to (packages/core/src/storage/vault.ts).
  * A value is never an argument and never printed: `set` reads it from standard input, or from an environment variable
  * (`--from-env`). The app reads the same vault, after its own store; `TESTPION_SECRET_*` variables still win over both.
  */
 export function registerVaultCommands(program: Command): void {
-  const vault = program
+  // a group of `secrets` (the command line keeps few top-level words); `secrets <environment>` stays what it was
+  const secrets = program.commands.find((c) => c.name() === 'secrets') ?? program.command('secrets');
+  const vault = secrets
     .command('vault')
     .description(
       `the secret store the command line can write to: an encrypted file in the app folder that the app reads too. Its key is kept by the operating system (Windows DPAPI, macOS Keychain, Linux Secret Service), or derived from ${VAULT_PASSPHRASE_ENV} when that is set (CI, containers)`,
@@ -22,7 +24,7 @@ export function registerVaultCommands(program: Command): void {
       const s = cliVault().status();
       if (o.json) printJson(s);
       else {
-        console.log(`${bold('Vault')}  ${s.file}${s.exists ? '' : dim('  (not made yet: `vault set` makes it)')}`);
+        console.log(`${bold('Vault')}  ${s.file}${s.exists ? '' : dim('  (not made yet: `secrets vault set` makes it)')}`);
         console.log(`  key      ${s.key}`);
         console.log(`  secrets  ${s.count}`);
         console.log(`  ${s.usable ? green('opens here') : red(`does not open here: ${s.why}`)}`);
@@ -37,13 +39,13 @@ export function registerVaultCommands(program: Command): void {
     .action((o: { json?: boolean }) => {
       const names = cliVault().list().sort();
       if (o.json) return printJson({ secrets: names });
-      if (!names.length) return console.log(dim('The vault is empty. `testpion vault set` adds a secret.'));
+      if (!names.length) return console.log(dim('The vault is empty. `testpion secrets vault set` adds a secret.'));
       for (const n of names) console.log(n);
     });
 
   const named = (cmd: Command) =>
     cmd
-      .argument('<name>', 'the secret variable (with -e or --global), the provider id (with --provider), or the full secret name as `vault list` prints it')
+      .argument('<name>', 'the secret variable (with -e or --global), the provider id (with --provider), or the full secret name as `secrets vault list` prints it')
       .option('-e, --environment <name>', 'a secret variable of this environment (needs -w)')
       .option('--global', 'a secret workspace variable (needs -w)')
       .option('--provider', 'the API key of the AI provider with this id')
@@ -73,15 +75,17 @@ export function registerVaultCommands(program: Command): void {
         value = process.env[o.fromEnv];
         if (value === undefined) throw new CliError(`The environment variable ${o.fromEnv} is not set`, EXIT.CONFIG_ERROR);
       } else {
-        if (process.stdin.isTTY) throw new CliError('Give the value on standard input (for example `printf %s "$TOKEN" | testpion vault set …`) or with --from-env <VARIABLE>: a value typed as an argument would stay in the shell history', EXIT.CONFIG_ERROR);
-        value = await new Promise<string>((resolve) => {
+        if (process.stdin.isTTY) throw new CliError('Give the value on standard input (for example `printf %s "$TOKEN" | testpion secrets vault set …`) or with --from-env <VARIABLE>: a value typed as an argument would stay in the shell history', EXIT.CONFIG_ERROR);
+        // a pipe that never sends anything (a script that forgot the value) is not waited for for ever
+        value = await new Promise<string>((resolve, reject) => {
           let s = '';
+          const quiet = setTimeout(() => reject(new CliError('No value came on standard input within 10 seconds: pipe it in (`printf %s "$TOKEN" | testpion secrets vault set …`) or use --from-env <VARIABLE>', EXIT.CONFIG_ERROR)), 10_000);
           process.stdin.setEncoding('utf8');
-          process.stdin.on('data', (d) => (s += d));
-          process.stdin.on('end', () => resolve(s.replace(/\r?\n$/, '')));
-        });
+          process.stdin.on('data', (d) => (clearTimeout(quiet), (s += d)));
+          process.stdin.on('end', () => (clearTimeout(quiet), resolve(s.replace(/\r?\n$/, ''))));
+        }).finally(() => process.stdin.pause());
       }
-      if (!value) throw new CliError('The value is empty: nothing was kept (`vault delete` removes a secret)', EXIT.CONFIG_ERROR);
+      if (!value) throw new CliError('The value is empty: nothing was kept (`secrets vault delete` removes a secret)', EXIT.CONFIG_ERROR);
       await cliVault().set(key, value);
       if (o.json) printJson({ name: key, set: true });
       else console.log(green(`Kept ${key} in the vault`));

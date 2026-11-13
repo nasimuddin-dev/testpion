@@ -9,25 +9,15 @@ import { TreeRowShell } from '../components/TreeRowShell';
 import { RunMiniBar, type RunRow } from '../components/RunsOverview';
 import { EnvBadge } from '../components/EnvSelect';
 import { attempt, selectEnvironments, useApp } from '../store';
-import { call } from '../api';
 import { TYPE_ICON } from '../components/ProblemList';
 import { startAiAnalysis } from '../components/ai/ai-analysis';
 import { copyText } from '../lib/clipboard';
-import { saveRunReport } from '../components/output/run-specs';
-import { finishSave, type SaveResult } from '../lib/files';
+import { saveReproBundle, saveRunReport } from '../components/output/run-specs';
 import { timeAgo } from '../lib/format';
 import { copyRunCommand, runInCi } from '../lib/run-ci';
 import { environmentOf } from '../lib/active-environment';
 
 /** The Tests view's list of runs: each row the `run` kind's node on the one row (TreeRowShell), with the one menu (lib/node-menu.ts). */
-/** Repro bundle…: the run's failed HTTP steps as one masked file to hand to a colleague (the Debugger opens it). */
-const saveReproBundle = (runId: string) =>
-  attempt(async () => {
-    const r = await call<SaveResult & { steps?: number; skipped?: Array<{ name: string; why: string }> }>('runs.repro', { runId });
-    finishSave(r, `The repro bundle (${plural(r.steps ?? 0, 'request')}, secrets masked)`);
-    if ((r.path || r.download) && r.skipped?.length) useApp.getState().toast(`${plural(r.skipped.length, 'failed step')} could not go in the bundle: ${r.skipped[0]!.why}`, 'info');
-  });
-
 export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onRunAll }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void; onRunAll(): void }) {
   // filter by name / environment, and only the runs where something failed
   const [query, setQuery] = useState('');
@@ -84,7 +74,7 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
                 copyRunId: () => void copyText(r.id, 'Run id'),
                 ci: () => void runInCi(r.id),
                 ...(r.failed + r.errors > 0 ? { triage: () => startAiAnalysis({ kind: 'triage', runId: r.id, title: r.name }) } : {}),
-                reproBundle: () => void saveReproBundle(r.id),
+                reproBundle: () => void attempt(() => saveReproBundle(r.id)),
                 createIssue: () => useApp.getState().set({ issueFor: { runId: r.id } }),
               },
               disabled: r.failed + r.errors > 0 ? {} : { rerunFailed: 'Nothing failed in this run', reproBundle: 'Nothing failed in this run: there is nothing to reproduce', createIssue: 'Nothing failed in this run: there is nothing to report' },

@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ApsError } from '../errors.js';
+import { spawnSyncChecked } from '../net/process.js';
 import { atomicWrite, readJson } from './fsutil.js';
 import type { SecretStore } from './secrets.js';
 
@@ -27,7 +27,7 @@ const SERVICE = 'TestPion vault';
 
 /** Where the master key is kept: how it is read, and how a new one is stored. */
 export interface VaultKeyring {
-  /** Shown by `testpion vault status` ("Windows DPAPI", "macOS Keychain" …). */
+  /** Shown by `testpion secrets vault status` ("Windows DPAPI", "macOS Keychain" …). */
   readonly name: string;
   /** Whether this keyring can be used here; when not, why (and what to do). */
   available(): { ok: true } | { ok: false; why: string };
@@ -47,7 +47,7 @@ interface VaultFile {
 }
 
 const run = (cmd: string, args: string[], input?: string): { ok: boolean; out: string; err: string } => {
-  const r = spawnSync(cmd, args, { input, encoding: 'utf8', windowsHide: true, timeout: 20_000 });
+  const r = spawnSyncChecked('the vault key (the operating system keeps it)', cmd, args, { input, encoding: 'utf8', windowsHide: true, timeout: 20_000 });
   return { ok: !r.error && r.status === 0, out: String(r.stdout ?? ''), err: String(r.stderr ?? r.error?.message ?? '') };
 };
 
@@ -118,7 +118,7 @@ export function osKeyring(dir: string, platform: string = process.platform): Vau
   return platform === 'win32' ? dpapiKeyring(dir) : platform === 'darwin' ? keychainKeyring() : secretServiceKeyring();
 }
 
-const CHECK = 'testpion vault';
+const CHECK = 'testpion secrets vault';
 
 function seal(key: Buffer, name: string, value: string): string {
   const iv = randomBytes(12);
@@ -195,7 +195,7 @@ export class VaultSecretStore implements SecretStore {
         const can = this.keyring.available();
         if (!can.ok) throw new ApsError('ConfigurationError', `The vault key is kept by ${data.key.keyring}, which cannot be used here: ${can.why}`, { suggestions: [] });
         key = this.keyring.read();
-        if (!key) throw new ApsError('ConfigurationError', `The vault key is not in ${this.keyring.name} (the vault was made by another user or on another computer)`, { suggestions: [`Delete ${VAULT_FILE} in the app folder to start an empty vault, or copy the secrets again with \`testpion vault set\`.`] });
+        if (!key) throw new ApsError('ConfigurationError', `The vault key is not in ${this.keyring.name} (the vault was made by another user or on another computer)`, { suggestions: [`Delete ${VAULT_FILE} in the app folder to start an empty vault, or copy the secrets again with \`testpion secrets vault set\`.`] });
       }
       try {
         if (open(key, 'check', data.check) !== CHECK) throw new Error('check');

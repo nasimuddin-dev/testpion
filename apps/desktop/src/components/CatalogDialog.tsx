@@ -2,13 +2,13 @@ import { Download } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { asError, call } from '../api';
 import { attempt, useApp } from '../store';
-import { finishSave, type SaveResult } from '../lib/files';
+import { saveCatalogPage } from './output/run-specs';
 import { openRef } from '../lib/open-ref';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
 import { Badge, Button, EmptyNote, FilterInput, LinkButton, Modal } from './ui';
 
-/** From `catalog.get` (workspaceCatalog in core). */
+/** From `col.catalog` (workspaceCatalog in core). */
 interface CatalogApi {
   id: string;
   name: string;
@@ -45,7 +45,7 @@ export function CatalogDialog() {
   const [q, setQ] = useState('');
   useEffect(() => {
     let live = true;
-    call<Catalog>('catalog.get').then(
+    call<Catalog>('col.catalog').then(
       (r) => live && setData(r),
       (e) => live && setError(asError(e).message),
     );
@@ -79,7 +79,7 @@ export function CatalogDialog() {
             <LinkButton className="text-xs mr-auto" title="The command that writes the catalog as a site: index.html, catalog.json and a documentation page per API" onClick={() => void copyText(SITE_COMMAND, 'the command')}>
               Copy the command that builds the site
             </LinkButton>
-            <Button icon={<Download size={13} />} onClick={() => void attempt(async () => finishSave(await call<SaveResult>('catalog.saveHtml'), 'The API catalog'))}>
+            <Button icon={<Download size={13} />} onClick={() => void attempt(saveCatalogPage)}>
               Save as a page…
             </Button>
           </>

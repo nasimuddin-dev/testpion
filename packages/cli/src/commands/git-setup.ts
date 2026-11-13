@@ -229,7 +229,7 @@ export function registerGitSetupCommands(git: Command): void {
         'what the one-click fix would do for secrets typed into staged MCP servers, providers, library items, tests and other files: the {{variable}} each value becomes (the values themselves move to secret variables in the TestPion app, whose secret store the command line does not have)',
       )
       .requiredOption('-e, --environment <name>', 'the environment whose secret variables would keep the values')
-      .option('--apply', 'do it: the values move to the vault of this computer (`testpion vault`), the files get the {{variables}}; `testpion git undo` takes the file changes back'),
+      .option('--apply', 'do it: the values move to the vault of this computer (`testpion secrets vault`), the files get the {{variables}}; `testpion git undo` takes the file changes back'),
   ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
       const env = s.getEnvironment(String(o.environment));

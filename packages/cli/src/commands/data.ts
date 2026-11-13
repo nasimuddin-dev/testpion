@@ -909,7 +909,7 @@ export function registerDataCommands(program: Command): void {
     });
   envCmd
     .command('set')
-    .description('set plain variables of an environment (key=value …); a secret variable is set with `testpion vault set` or in the app')
+    .description('set plain variables of an environment (key=value …); a secret variable is set with `testpion secrets vault set` or in the app')
     .argument('<environment>', 'environment name or id')
     .argument('<assignments...>', 'key=value pairs')
     .requiredOption('-w, --workspace <nameOrPath>')

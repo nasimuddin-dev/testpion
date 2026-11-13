@@ -10,7 +10,7 @@ import { strictHarRedactor } from './har.js';
 import type { DebuggerExchange } from './proxy-types.js';
 
 /**
- * A repro bundle of a run's failures (`testpion debugger repro`, MCP `debugger_repro`, RPC `run.repro`, Run results ▸
+ * A repro bundle of a run's failures (`testpion debug-export --run`, MCP `debugger_session` with `run`, RPC `runs.repro`, a run's
  * Repro bundle…): the failing HTTP steps as they were sent and answered, in one `.tpbundle` file (the share bundle of
  * the Debugger: a masked HAR, facts about this computer, notes). Whoever gets it opens it in TestPion (Debugger ▸ Open
  * session) or with `testpion debugger open`, sees each request and response, and resends or saves one as a request.

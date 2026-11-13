@@ -150,12 +150,12 @@ export async function withWorkspace<T>(ref: string | undefined, fn: (store: Work
 /** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge and diff drivers. */
 export const cliSelf = () => `"${process.execPath.split('\\').join('/')}" "${process.argv[1]!.split('\\').join('/')}"`;
 
-/** The vault of this computer's app folder (`testpion vault`, storage/vault.ts): the secret store the command line can write to. */
+/** The vault of this computer's app folder (`testpion secrets vault`, storage/vault.ts): the secret store the command line can write to. */
 export const cliVault = () => new VaultSecretStore(process.env.TESTPION_HOME || defaultAppDir());
 
 /**
  * The CLI's secrets: TESTPION_SECRET_* environment variables first (CI decides), then the vault, read only: a run never
- * writes a secret (only `testpion vault` and `git fix-secrets --apply` do), and the vault's key is asked for only when a
+ * writes a secret (only `testpion secrets vault` and `git fix-secrets --apply` do), and the vault's key is asked for only when a
  * name is in it.
  */
 export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore(), readOnlySecrets(cliVault())]);

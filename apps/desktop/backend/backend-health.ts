@@ -104,7 +104,7 @@ export function reportStartupProblem(be: Backend, path: string | undefined, e: u
 }
 
 /**
- * The app's secrets: its own encrypted store (written here), then what `testpion vault set` kept on this computer (read
+ * The app's secrets: its own encrypted store (written here), then what `testpion secrets vault set` kept on this computer (read
  * only here; not on a server, where the app folder is not a person's), then TESTPION_SECRET_* environment variables.
  */
 export function appSecrets(be: Backend, host: { appDir: string; cipher?: ConstructorParameters<typeof EncryptedFileSecretStore>[1]; serverMode?: boolean }): ChainSecretStore {

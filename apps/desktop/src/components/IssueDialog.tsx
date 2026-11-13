@@ -53,6 +53,7 @@ export function IssueDialog() {
     <Modal
       title="Create issue"
       onClose={close}
+      onSubmit={draft?.url ? () => void open() : undefined}
       width={720}
       footer={
         draft ? (

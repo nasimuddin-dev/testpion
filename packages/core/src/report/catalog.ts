@@ -13,7 +13,7 @@ import type { CollectionDocsOptions } from './collection-docs.js';
 
 /**
  * The API catalog: every API of a workspace on one page (`testpion docs --catalog`, `docs --site <dir>`, MCP
- * `api_catalog`, RPC `catalog.get`). An API is a collection; the catalog says what belongs to it: how many requests,
+ * `api_catalog`, RPC `col.catalog`). An API is a collection; the catalog says what belongs to it: how many requests,
  * which hosts they call, the API definition it implements and how many of that definition's operations have a request,
  * the environments that define its variables, its monitors with their latest result, the test files and flows that run
  * it, its saved gRPC calls and connections, and who owns it (CODEOWNERS). Read only; names, counts and statuses, never a

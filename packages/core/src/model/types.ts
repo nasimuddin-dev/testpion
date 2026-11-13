@@ -627,8 +627,7 @@ export interface EnvironmentVariable {
   /** For secret variables this is empty on disk; the value lives in the secret store. */
   value: string;
   secret?: boolean;
-  enabled?: boolean;
-  valueType?: KeyValue['valueType']; // number, boolean or JSON instead of text (shared/variable-types.ts)
+  enabled?: boolean; valueType?: KeyValue['valueType']; // (the type: number, boolean or JSON instead of text, shared/variable-types.ts)
 }
 
 export interface Environment {

@@ -1,5 +1,5 @@
 /** RPC handlers: the item-kind registry, and what node menus do to the files of a kind (REG-5, MENU-2). */
-import { ApsError, catalogHtml, catalogSite, describeKinds, folderOfWorkspaceFile, itemUses, removeItem, workspaceCatalog, renameSpecFile, duplicateSpecFile, restoreItem } from '@testpion/core';
+import { ApsError, catalogHtml, describeKinds, folderOfWorkspaceFile, itemUses, removeItem, workspaceCatalog, renameSpecFile, duplicateSpecFile, restoreItem } from '@testpion/core';
 import { KIND_INFO, type KindId } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
 import { saveText } from './save-text.js';
@@ -37,11 +37,9 @@ export function kindHandlers(be: Backend): Handlers {
     /** What an item uses and what uses it (read only: the reading of "Export with everything it uses"). */
     'item.uses': ({ ref }: { ref: unknown }) => itemUses(be.ws, ref),
     /** The API catalog: every API with what belongs to it (report/catalog.ts; read only). */
-    'catalog.get': () => workspaceCatalog(be.ws),
-    /** The catalog as a site (index.html, catalog.json, a documentation page per API), as files for the window to save in a folder the person picks. */
-    'catalog.site': async () => (await catalogSite(be.ws)).files,
+    'col.catalog': () => workspaceCatalog(be.ws),
     /** Save the catalog as one HTML page (the save dialog, or a download where there is none). */
-    'catalog.saveHtml': async () => saveText(be, 'api-catalog.html', [{ name: 'HTML', extensions: ['html'] }], catalogHtml(await workspaceCatalog(be.ws), { links: false }), 'text/html'),
+    'col.catalogSave': async () => saveText(be, 'api-catalog.html', [{ name: 'HTML', extensions: ['html'] }], catalogHtml(await workspaceCatalog(be.ws), { links: false }), 'text/html'),
     /** Reveal file: the folder that holds a workspace file, in the file manager (the file itself is never opened: it could be a program). */
     'workspace.revealFile': ({ path }: { path: string }) => {
       if (!be.host.openPath) throw new ApsError('ConfigurationError', 'Showing files is not available here (TestPion in a browser)', { suggestions: ['Copy path instead.'] });

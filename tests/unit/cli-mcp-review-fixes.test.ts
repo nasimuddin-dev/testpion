@@ -42,7 +42,7 @@ const envelope = (out: string) => JSON.parse(out) as { status: string; data: unk
 /** Commands that change nothing a workspace or the app folder keeps: they print, or write only the file named with --out. */
 const READS = new Set([
   'eval list', 'eval compare', 'eval matrix', 'eval summary', 'eval diff', 'eval trajectory', 'eval review', 'eval versions', 'eval lint', 'eval version-diff', 'eval variants', 'eval estimate',
-  'feedback', 'graphql-op', 'item uses', 'vault status', 'vault list', 'vars usages', 'vars unused', 'collections', 'jwt', 'attention', 'certificates', 'load-history', 'variable-flow', 'datasets show', 'requests', 'wait-for',
+  'feedback', 'graphql-op', 'item uses', 'secrets vault status', 'secrets vault list', 'vars usages', 'vars unused', 'collections', 'jwt', 'attention', 'certificates', 'load-history', 'variable-flow', 'datasets show', 'requests', 'wait-for',
   'env matrix', 'env get', 'env list', 'env diff', 'import-report', 'workspace list', 'workspace trust list',
   'git check', 'git history', 'git blame', 'git stash list', 'git stash show', 'git textconv', 'git shared-sessions', 'git allowed-secrets', 'git status', 'git changes', 'git diff', 'git log', 'git activity', 'git incoming', 'diff',
   'trash list', 'doctor', 'diagnostics', 'agent-info', 'open', 'monitor list', 'monitor status', 'monitor results', 'monitor requests', 'monitor uptime', 'secrets',

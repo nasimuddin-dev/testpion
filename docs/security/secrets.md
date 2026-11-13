@@ -19,17 +19,17 @@ Passwords and keys never go into workspace files. TestPion keeps them in your co
 The command line cannot open the app's secret store, so it has one of its own that the app reads too: the vault, a file in the app folder (`secrets.vault.json`) in which every value is encrypted on its own (AES-256-GCM, bound to the secret's name).
 
 ```bash
-printf %s "$TOKEN" | testpion vault set token -e Staging -w my-workspace   # a secret variable of an environment
-testpion vault set openai --provider --from-env OPENAI_API_KEY             # an AI provider's API key
-testpion vault list                                                        # names only, never values
-testpion vault status                                                      # where the key comes from, whether it opens here
-testpion vault delete token -e Staging -w my-workspace
+printf %s "$TOKEN" | testpion secrets vault set token -e Staging -w my-workspace   # a secret variable of an environment
+testpion secrets vault set openai --provider --from-env OPENAI_API_KEY             # an AI provider's API key
+testpion secrets vault list                                                        # names only, never values
+testpion secrets vault status                                                      # where the key comes from, whether it opens here
+testpion secrets vault delete token -e Staging -w my-workspace
 ```
 
-- A value is never an argument and never printed: `vault set` reads it from standard input or from an environment variable (`--from-env`).
+- A value is never an argument and never printed: `secrets vault set` reads it from standard input or from an environment variable (`--from-env`).
 - **Where the key is kept.** By the operating system: Windows DPAPI (for your user account), the macOS Keychain, or the Linux Secret Service (`secret-tool`, package `libsecret-tools`). The vault file alone opens nothing, and it does not open on another computer or for another user.
 - **CI and containers** have no keyring: set `TESTPION_VAULT_PASSPHRASE` and the key is derived from that passphrase instead. A vault made with a passphrase needs it every time.
-- **Order.** The CLI reads `TESTPION_SECRET_*` first, then the vault. The app reads its own store first, then the vault, then the environment variables. A run never writes the vault: only `testpion vault set|delete` and `testpion git fix-secrets --apply` do.
+- **Order.** The CLI reads `TESTPION_SECRET_*` first, then the vault. The app reads its own store first, then the vault, then the environment variables. A run never writes the vault: only `testpion secrets vault set|delete` and `testpion git fix-secrets --apply` do.
 - `testpion git fix-secrets -e <environment> --apply` moves secrets typed into staged files to the vault and puts `{{variables}}` in their place, as *Fix all* does in the app.
 - **Workspace files** only reference secrets (`{{$secret.provider.openai.apiKey}}`). Saving a provider with a literal API key is rejected.
 - **Exports** never contain secret values.
