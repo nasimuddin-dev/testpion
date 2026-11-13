@@ -1,6 +1,6 @@
 // Dragging in the Collections tree with the real mouse (the page's own dragstart, Chromium's drag, a real drop): a request
 // from one folder into another, a request before another one, a folder into a folder, a request into another collection,
-// and a gRPC call into a folder. The other tree plans dispatch drag events from the page, which does not show what a
+// a gRPC call into a folder, and a request onto a closed folder. The other tree plans dispatch drag events from the page, which does not show what a
 // user's drop does: between the window's listeners and the row's handler the page may re-render.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -60,6 +60,18 @@ const steps = [
      return (await shape('e2e-drag')) + ' | ' + (await shape('e2e-drag2'));`,
   ),
   step(
+    'a-request-dragged-onto-a-closed-folder-moves-into-it',
+    `${H}
+     const t = toggleOf(node('e2e-drag:e2e-db')); if (!t) return 'NO FOLDER';
+     if (t.getAttribute('aria-expanded') === 'true') { t.click(); await __t.sleep(400); }
+     const closed = toggleOf(node('e2e-drag:e2e-db'))?.getAttribute('aria-expanded') === 'false';
+     await unfold('e2e-drag2:e2e-dc');
+     const a = await __t.waitFor(() => node('e2e-drag2:e2e-d3'), 4000); const b = node('e2e-drag:e2e-db'); if (!a || !b) return 'NO ROWS ' + !!a + '/' + !!b;
+     const r = await __t.real.dnd(a, b); if (r !== 'ok') return 'DND: ' + r;
+     await __t.waitFor(async () => ((await shape('e2e-drag2')) === 'C[]' ? true : null), 5000);
+     return 'closed: ' + closed + ' | ' + (await shape('e2e-drag')) + ' | ' + (await shape('e2e-drag2'));`,
+  ),
+  step(
     'clean-up',
     `await window.aps.invoke('lib.save', { kind: 'grpc', library: { folders: [], items: [] } }).catch(() => undefined);
      await window.aps.invoke('col.delete', { id: 'e2e-drag' }).catch(() => undefined);
@@ -75,5 +87,6 @@ module.exports = withExpect(steps, {
   'a-folder-dragged-onto-a-folder-moves-into-it': /^A\[Three,B\[Two,Four,One\]\]$/,
   'a-grpc-call-dragged-onto-a-folder-moves-into-it': /^folder: e2e-db$/,
   'a-request-dragged-onto-a-folder-of-another-collection-moves-there': /^A\[B\[Two,Four,One\]\] \| C\[Three\]$/,
+  'a-request-dragged-onto-a-closed-folder-moves-into-it': /^closed: true \| A\[B\[Two,Four,One,Three\]\] \| C\[\]$/,
   'clean-up': /^done$/,
 });
