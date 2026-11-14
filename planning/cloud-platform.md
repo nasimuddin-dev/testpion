@@ -2,6 +2,8 @@
 
 A hosted version of TestPion for teams: sign in, create an organization and teams, share workspaces and collections with permissions, work on the same collection together, run tests and monitors in the cloud, and keep using the desktop app (offline-first) with everything in sync.
 
+> **Replaced on 2026-11-13 by [cloud-teams.md](cloud-teams.md):** the owner chose a cloud that holds only people and permissions, with all content in git. This file is kept for reference.
+>
 > **Not started on purpose.** Per the owner, every non-cloud feature comes first. This plan is the design to start from when the owner says so.
 
 ## Principles

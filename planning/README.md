@@ -5,7 +5,8 @@ Internal plans and backlogs for the next stages of TestPion. Not published with 
 | Plan | What it covers |
 |---|---|
 | [git-integration.md](git-integration.md) | Workspaces in git: git-friendly files, an in-app Git panel, smart merging, AI and CLI |
-| [cloud-platform.md](cloud-platform.md) | TestPion Cloud: accounts, organizations and teams, sharing and permissions, sync, cloud runners, security |
+| [cloud-teams.md](cloud-teams.md) | **The cloud plan (2026-11-13):** the cloud holds only accounts, teams, the workspace registry and permissions; content stays in git and everything runs on the user's computer. Backlog TC-… |
+| [cloud-platform.md](cloud-platform.md) | The earlier, larger cloud design (sync, cloud runners, server storage): replaced by cloud-teams.md, kept for reference |
 | [subscriptions.md](subscriptions.md) | Plans (Free, Pro, Team, Enterprise), what each includes, limits, billing and licensing |
 | [roadmap.md](roadmap.md) | The order of the work across the three plans, milestones and dependencies |
 
