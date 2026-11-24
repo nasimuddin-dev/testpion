@@ -11,7 +11,8 @@ const files = (dir: string): string[] =>
   });
 
 // the names that are more than one common word: spelled out in code they would drift when a place is renamed
-const NAMES = [VIEW_NAME.aiQuality, VIEW_NAME.rag, AI_TAB_NAME.playground, AI_TAB_NAME.providers, SETTINGS_TAB_NAME.privacy, SETTINGS_TAB_NAME.load, SETTINGS_TAB_NAME.agents];
+// (the RAG rail item is one short word since 0.58, part of many identifiers: it cannot be searched for)
+const NAMES = [VIEW_NAME.aiQuality, AI_TAB_NAME.playground, AI_TAB_NAME.providers, SETTINGS_TAB_NAME.privacy, SETTINGS_TAB_NAME.load, SETTINGS_TAB_NAME.agents];
 // two names are also plain words in sentences (the assistant, the price table): only their exact spelling is a place
 const EXACT = [SETTINGS_TAB_NAME.assistant, SETTINGS_TAB_NAME.pricing];
 

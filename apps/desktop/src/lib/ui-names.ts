@@ -12,7 +12,7 @@ export const VIEW_NAME = {
   monitors: 'Monitors',
   load: 'Load',
   aiQuality: 'AI Quality',
-  rag: 'RAG Bots',
+  rag: 'RAG',
   environments: 'Environments',
   history: 'History',
   traces: 'Traces',
@@ -23,7 +23,7 @@ export const VIEW_NAME = {
 /** The tabs of the AI Quality rail item. */
 export const AI_TAB_NAME = { start: 'Start', checks: 'Checks', playground: 'Try a Prompt', compare: 'Compare', providers: 'Models and Keys' } as const;
 
-/** The tabs of the RAG Bots rail item. */
+/** The tabs of the RAG rail item. */
 export const RAG_TAB_NAME = { start: 'Start', bots: 'Bots', questions: 'Questions', metrics: 'Metrics', checks: 'Checks' } as const;
 
 /** The tabs of Settings. */

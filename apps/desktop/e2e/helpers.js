@@ -30,11 +30,11 @@ window.__t = (() => {
     view: async (label) => {
       await esc();
       if (label === 'Bot checks') {
-        await window.__t.rail('RAG Bots');
+        await window.__t.rail('RAG');
         await sleep(1000);
-        const checks = [...document.querySelectorAll('[role=tablist][aria-label="RAG Bots"] [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Checks');
+        const checks = [...document.querySelectorAll('[role=tablist][aria-label="RAG"] [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Checks');
         if (checks && checks.getAttribute('aria-selected') !== 'true') { checks.click(); await sleep(1200); }
-        return !!document.querySelector('nav [aria-label="RAG Bots"][aria-current="page"]');
+        return !!document.querySelector('nav [aria-label="RAG"][aria-current="page"]');
       }
       const legacy = label === 'AI Lab' || label === 'Evaluations';
       await window.__t.rail(legacy ? 'AI Quality' : label);

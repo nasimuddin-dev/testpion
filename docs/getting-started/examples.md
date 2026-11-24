@@ -64,7 +64,7 @@ A set of small, commented files to read, run and change: every one works offline
 | Saved evaluations **Learn: review sentiment (prompt)**, **Learn: task agent (agent)** | A prompt evaluation and an agent evaluation ready to run from **Checks**, with their report cards. |
 | Monitor **Learn: nightly intent check (prompt)** | The sentiment evaluation on a schedule, switched off. Turn it on in **Monitors** to see a nightly check that fails when the pass rate falls. |
 
-**RAG Bots** (RAG Bots ▸ Bots, Questions, Metrics, Checks)
+**RAG** (RAG ▸ Bots, Questions, Metrics, Checks)
 
 | File | What it shows |
 |---|---|

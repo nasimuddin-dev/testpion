@@ -51,7 +51,7 @@ const steps = [
   step('load', `return visit('Load');`),
   step('debugger', `return visit('Debugger');`),
   step('ai-quality', `return tabs('AI Quality', ['Start', 'Checks', 'Try a Prompt', 'Compare', 'Models and Keys']);`),
-  step('rag-bots', `return tabs('RAG Bots', ['Start', 'Bots', 'Questions', 'Metrics', 'Checks']);`),
+  step('rag-bots', `return tabs('RAG', ['Start', 'Bots', 'Questions', 'Metrics', 'Checks']);`),
   step('settings', `return tabs('Settings', ['Appearance', 'Keyboard', 'Requests', 'Git', 'Proxy', 'Certificates', 'Privacy & Security', 'Model Pricing', 'Load Testing', 'Storage', 'AI Assistant', 'AI Agents (MCP)', 'About']);`),
 ];
 
