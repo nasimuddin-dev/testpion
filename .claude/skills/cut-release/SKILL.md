@@ -5,8 +5,8 @@ description: Cut a TestPion release (version bump, changelog, tests, UI regressi
 
 # Release
 
-Releases are built by GitHub Actions from a `vX.Y.Z` tag (Windows setup and portable, macOS dmg ×2, Linux deb/rpm/AppImage,
-update feeds, `SHA256SUMS.txt` and its Sigstore signature `SHA256SUMS.txt.sigstore.json`; 12 assets). Commits go straight to `main` as the owner (the rulesets let the admin bypass; the push prints
+Releases are built by GitHub Actions from a `vX.Y.Z` tag (Windows User Installer, System Installer, .zip and portable, macOS dmg ×2, Linux deb/rpm/AppImage,
+update feeds, `SHA256SUMS.txt` and its Sigstore signature `SHA256SUMS.txt.sigstore.json`; 14 assets). Commits go straight to `main` as the owner (the rulesets let the admin bypass; the push prints
 "Bypassed rule violations", which is expected). Never loosen the rulesets; if a push is rejected for another reason
 (secret detection, …) stop and tell the owner.
 
@@ -39,7 +39,7 @@ update feeds, `SHA256SUMS.txt` and its Sigstore signature `SHA256SUMS.txt.sigsto
    git ls-remote origin refs/tags/vX.Y.Z
    ```
 6. **Watch the build:** `gh run list --workflow release.yml -L 1`, then `gh run watch <id>` (or check every few minutes);
-   when it succeeds, `gh release view vX.Y.Z --json assets --jq '.assets|length'` must be 11.
+   when it succeeds, `gh release view vX.Y.Z --json assets --jq '.assets|length'` must be 14.
    The *Publish the CLI to npm* job publishes `testpion@X.Y.Z` when the repository has an `NPM_TOKEN` secret (it
    prints a notice and skips otherwise). Check with `npm view testpion version`. Before tagging, `npm run pack:cli`
    must succeed locally (the npm-package integration test covers it).

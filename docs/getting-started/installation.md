@@ -13,7 +13,7 @@ Download the installer for your system, run it and open TestPion. It takes about
 
 Download the installer for your system from the [download page](/download), then follow the guide:
 
-- [Windows](/installation/windows) — installer or portable `.exe`
+- [Windows](/installation/windows) — User Installer, System Installer, or a `.zip` and a portable `.exe` that run without installing
 - [macOS](/installation/macos) — `.dmg` for Apple Silicon and Intel
 - [Linux](/installation/linux) — AppImage, `.deb` or `.rpm`
 

@@ -4,13 +4,18 @@
  * - Windows (installed with the NSIS installer) and Linux (AppImage): the update is downloaded from the
  *   GitHub release, its SHA-512 checked against the release's latest*.yml, and installed in place;
  *   the app restarts. Workspaces, settings and secrets are kept.
- * - macOS, the Windows portable build, .deb and .rpm: in-place updates aren't possible (macOS requires a
+ * - macOS, the Windows portable builds (.zip and portable .exe), .deb and .rpm: in-place updates aren't possible (macOS requires a
  *   signed app; packages are owned by the system package manager), so the user is told about the new
  *   version and sent to the download page.
  */
 import { app } from 'electron';
 import type { AppUpdater, UpdateInfo } from 'electron-updater';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { compareVersions } from './semver.js';
+
+/** Was this copy put here by an installer (the uninstaller is beside it)? The unpacked .zip was not. */
+const installedByInstaller = (): boolean => existsSync(join(dirname(process.execPath), 'Uninstall TestPion.exe'));
 
 export { compareVersions };
 
@@ -31,7 +36,9 @@ export interface UpdateCheckResult {
 /** Whether this installation can replace itself. */
 export function canInstallInPlace(): boolean {
   if (!app.isPackaged) return false;
-  if (process.platform === 'win32') return !process.env.PORTABLE_EXECUTABLE_DIR; // set by the portable launcher
+  // only a copy an installer put there (User or System Installer): the portable .exe (PORTABLE_EXECUTABLE_DIR, set by its
+  // launcher) and the unpacked .zip have no installer to run, and running one would add a second copy
+  if (process.platform === 'win32') return !process.env.PORTABLE_EXECUTABLE_DIR && !process.env.TESTPION_PORTABLE_DATA && installedByInstaller();
   if (process.platform === 'linux') return !!process.env.APPIMAGE;
   return false;
 }

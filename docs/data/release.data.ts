@@ -46,8 +46,10 @@ export default {
       date,
       releaseUrl: `${REPO}/releases/tag/v${version}`,
       windows: [
-        make('Installer (x64)', `TestPion-${version}-windows-x64-setup.exe`, 'Recommended. Adds Start menu and desktop shortcuts; install for yourself or for all users.'),
-        make('Portable (x64)', `TestPion-${version}-windows-x64-portable.exe`, 'Runs without installing — for locked-down PCs or USB sticks.'),
+        make('User Installer (x64)', `TestPion-${version}-windows-x64-setup.exe`, 'Recommended. Installs for you only; no administrator rights needed. Updates itself.'),
+        make('System Installer (x64)', `TestPion-${version}-windows-x64-system-setup.exe`, 'Installs for everyone who uses the computer; needs administrator rights.'),
+        make('.zip (x64)', `TestPion-${version}-windows-x64.zip`, 'No install: unpack and run TestPion.exe. A data folder beside it makes it portable.'),
+        make('Portable .exe (x64)', `TestPion-${version}-windows-x64-portable.exe`, 'No install, one file. Starts slower than the .zip: it unpacks itself each time.'),
       ],
       macos: [
         make('Apple Silicon (M1 and later)', `TestPion-${version}-macos-arm64.dmg`, 'Disk image for Macs with Apple chips.'),

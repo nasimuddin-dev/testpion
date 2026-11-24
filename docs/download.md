@@ -1,6 +1,6 @@
 ---
 title: Download
-description: Download TestPion for Windows (installer or portable), macOS (Apple Silicon and Intel) or Linux (AppImage, .deb, .rpm). Free, self-contained installers from GitHub Releases.
+description: Download TestPion for Windows (User Installer, System Installer, .zip or portable), macOS (Apple Silicon and Intel) or Linux (AppImage, .deb, .rpm). Free, self-contained installers from GitHub Releases.
 ---
 
 <script setup>
@@ -15,7 +15,7 @@ The current version is **{{ release.version }}**<span v-if="release.date">, rele
 
 ## Which file do I need?
 
-- **Windows:** use the **installer**. Choose the **portable** `.exe` if you can't install software; it keeps no shortcuts, but your workspaces and settings are stored the same way.
+- **Windows:** use the **User Installer**: it installs for you only and needs no administrator rights. The **System Installer** installs for everyone who uses the computer and needs an administrator. If you can't or don't want to install anything, take the **.zip**: unpack it and run `TestPion.exe`; with a `data` folder beside it, it keeps everything in that folder ([portable mode](/installation/windows#portable-mode)).
 - **macOS:** choose **Apple Silicon** for Macs with an M-series chip, or **Intel** for older Macs. Apple menu → **About This Mac** shows which one you have.
 - **Linux:** the **AppImage** runs on most distributions without installing. Use the **.deb** on Ubuntu and Debian derivatives, or the **.rpm** on Fedora, RHEL and openSUSE, to get a menu entry.
 - **CI servers:** use the [`testpion` CLI](/installation/cli) instead of the desktop app.

@@ -116,7 +116,7 @@ TestPion is a desktop app for Windows, macOS and Linux, and every release has in
 
 | System | Installers |
 | --- | --- |
-| **Windows** 10 and 11, x64 | Installer (`.exe`) or a portable `.exe` that runs without installing |
+| **Windows** 10 and 11, x64 | User Installer (no administrator rights), System Installer (all users), or a `.zip` and a portable `.exe` that run without installing |
 | **macOS** 12+ | `.dmg` for Apple Silicon and for Intel |
 | **Linux** x86_64 | AppImage, `.deb` and `.rpm` |
 

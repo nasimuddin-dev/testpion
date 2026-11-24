@@ -40,7 +40,7 @@ Download the installer for your system from the [download page](https://nasimudd
 
 | System | Files |
 | --- | --- |
-| Windows 10/11 x64 | `TestPion-<version>-windows-x64-setup.exe` (installer) or `-portable.exe` |
+| Windows 10/11 x64 | `TestPion-<version>-windows-x64-setup.exe` (User Installer, no administrator rights), `-system-setup.exe` (System Installer, all users), `.zip` or `-portable.exe` (no install) |
 | macOS 12+ | `TestPion-<version>-macos-arm64.dmg` (Apple Silicon) or `-macos-x64.dmg` (Intel) |
 | Linux x86_64 | `.AppImage`, `.deb` or `.rpm` |
 

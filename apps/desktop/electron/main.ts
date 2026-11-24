@@ -188,7 +188,8 @@ if (capture) {
 
 // Keep using the Electron profile of installs from before the TestPion name ("FluxPion" 0.5, "ProtoPion" 0.4, "Protolens" 0.2–0.3):
 // it holds the safeStorage key that decrypts saved secrets, plus UI state such as open tabs.
-if (!capture && !existsSync(join(app.getPath('appData'), 'TestPion'))) {
+// (Not in portable mode: boot.cjs has put the profile into the `data` folder next to the program.)
+if (!capture && !process.env.TESTPION_PORTABLE_DATA && !existsSync(join(app.getPath('appData'), 'TestPion'))) {
   const legacy = ['FluxPion', 'ProtoPion', 'Protolens'].map((n) => join(app.getPath('appData'), n)).find((d) => existsSync(d));
   if (legacy) app.setPath('userData', legacy);
 }

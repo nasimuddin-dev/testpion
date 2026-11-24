@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Windows: User Installer, System Installer and a .zip
+
+- **Two installers, like other developer tools.** The **User Installer** (`…-windows-x64-setup.exe`, the name as before) installs for you only and never asks for administrator rights or who to install for. The new **System Installer** (`…-windows-x64-system-setup.exe`) installs for everyone who uses the computer. A computer that already has TestPion installed for everyone keeps being updated in place.
+- **A .zip that runs without installing** (`…-windows-x64.zip`): unpack it and run `TestPion.exe`. It starts as fast as an installed copy and does not unpack itself on each start as the portable `.exe` does, which some company computers block.
+- **Portable mode.** A folder named `data` next to `TestPion.exe` (or next to the portable `.exe`) makes that copy keep everything in it: workspaces, settings, saved secrets, the window's state. Nothing is written to your profile folder.
+- The .zip and portable copies tell you about a new version and open the download page instead of running an installer.
+
 ### Recently deleted, for more kinds
 
 - **A deleted gRPC call, connection, prompt, load test, evaluation, monitor, RAG target, test file, flow or AI provider goes to Recently deleted** and stays there for 30 days, like collections and environments already did. Undo in the message still brings it back at once, in its place; after that, *Recently deleted…* in the list's menu (and `testpion trash list`) does. An AI provider's API key stays in the secret store, so a restored provider works again.

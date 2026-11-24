@@ -5,7 +5,9 @@ name: Release
 # to rebuild an existing release.
 #
 # Asset names are stable so the website's download page can link to them:
-#   TestPion-<version>-windows-x64-setup.exe
+#   TestPion-<version>-windows-x64-setup.exe          (User Installer)
+#   TestPion-<version>-windows-x64-system-setup.exe   (System Installer)
+#   TestPion-<version>-windows-x64.zip
 #   TestPion-<version>-windows-x64-portable.exe
 #   TestPion-<version>-macos-arm64.dmg
 #   TestPion-<version>-macos-x64.dmg
@@ -108,6 +110,8 @@ jobs:
           [ -z "$WIN_CSC_LINK" ] && unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
           [ -z "$CSC_LINK" ] && unset CSC_LINK CSC_KEY_PASSWORD
           npx electron-builder --config electron-builder.yml ${{ matrix.target }} --publish never $extra
+          # Windows: the System Installer (all users), from the app folder the first run made and signed
+          if [ "${{ runner.os }}" = "Windows" ]; then node scripts/package-system.mjs; fi
       - name: Collect installers
         shell: bash
         run: |
@@ -118,7 +122,8 @@ jobs:
             [ -f "apps/desktop/release/$f" ] && cp "apps/desktop/release/$f" out/
           done
           # blockmaps are only used for differential Windows/AppImage updates
-          find out -name '*.blockmap' ! -name '*-setup.exe.blockmap' ! -name '*.AppImage.blockmap' -delete
+          # (the feed names the User Installer only: the System Installer and the .zip have no use for one)
+          find out -name '*.blockmap' ! -name '*-x64-setup.exe.blockmap' ! -name '*.AppImage.blockmap' -delete
           ls -l out
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

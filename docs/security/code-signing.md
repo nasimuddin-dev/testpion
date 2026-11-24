@@ -36,7 +36,7 @@ A remote-signing service for Windows replaces the first two with the service's o
 
 `.github/workflows/release.yml`, step *Package*:
 
-- **Windows**: with `WIN_CSC_LINK`, electron-builder signs the installer, the portable build and the app's executables, and writes the publisher name into the update feed, so the updater refuses an update that another publisher signed.
+- **Windows**: with `WIN_CSC_LINK`, electron-builder signs the installers (User and System), the portable build and the app's executables (the `.zip` holds the same signed program), and writes the publisher name into the update feed, so the updater refuses an update that another publisher signed.
 - **macOS**: with `CSC_LINK`, the ad-hoc identity (`-`) is replaced by the real one, the hardened runtime is turned on, and with `APPLE_ID` the app is notarized and stapled.
 - **Linux**: not signed (the `SHA256SUMS.txt` signature covers it).
 - Without the secrets nothing changes: unsigned on Windows, ad-hoc signed on macOS.

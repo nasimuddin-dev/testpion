@@ -13,6 +13,7 @@
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "package": "npm run build && electron-builder --config electron-builder.yml --publish never",
+    "package:system": "node scripts/package-system.mjs",
     "package:dir": "npm run build && electron-builder --config electron-builder.yml --dir --publish never",
     "icons": "electron scripts/make-icons.cjs",
     "screenshots": "node scripts/build-main.mjs && vite build && node scripts/capture.cjs",

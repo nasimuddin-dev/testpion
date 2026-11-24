@@ -13,6 +13,8 @@ const mainOptions = { ...nodeBundleOptions, plugins: [lazyModulesPlugin], suppor
 await build({ ...mainOptions, entryPoints: [join(root, 'electron/main.ts')], outfile: join(out, 'main.cjs') });
 // the entry (package.json "main"): turns on V8's compile cache, then loads main.cjs
 copyFileSync(join(root, 'electron/boot.cjs'), join(out, 'boot.cjs'));
+// portable mode (a `data` folder next to the program), decided by boot.cjs before anything reads a path
+copyFileSync(join(root, 'electron/portable-data.cjs'), join(out, 'portable-data.cjs'));
 // `TestPion --cli …` (the `testpion` command of the Terminal panel): the CLI, loaded only in that mode
 await build({ ...mainOptions, entryPoints: [join(root, '../../packages/cli/src/index.ts')], outfile: join(out, 'cli.cjs') });
 // the script engine in a worker thread (TESTPION_SCRIPT_WORKERS=1; core scripts/script-runner-workers.ts finds it next to main.cjs)
