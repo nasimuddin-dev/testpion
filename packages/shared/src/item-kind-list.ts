@@ -684,6 +684,11 @@ const KINDS: readonly ItemKindInfo[] = [
       export: true,
       import: true,
       versioned: { planned: '0.59' },
+      // the git operations of an item come with its versioning
+      'git-history': { planned: '0.59' },
+      'git-discard': { planned: '0.59' },
+      'git-stage': { planned: '0.59' },
+      'secret-scan': { planned: '0.59' },
       open: { na: 'edited in AI Lab ▸ RAG ▸ Metrics, where the metrics are listed' },
       link: { na: 'used by name (custom/<id>) in evaluations, presets and formulas' },
       rename: { na: 'the file name is the metric id that evaluations name: make it again under another id (New) and delete the old file' },

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.58.0 — 2026-11-24
 
 ### Windows: User Installer, System Installer and a .zip
 
@@ -8,6 +8,10 @@
 - **A .zip that runs without installing** (`…-windows-x64.zip`): unpack it and run `TestPion.exe`. It starts as fast as an installed copy and does not unpack itself on each start as the portable `.exe` does, which some company computers block.
 - **Portable mode.** A folder named `data` next to `TestPion.exe` (or next to the portable `.exe`) makes that copy keep everything in it: workspaces, settings, saved secrets, the window's state. Nothing is written to your profile folder.
 - The .zip and portable copies tell you about a new version and open the download page instead of running an installer.
+
+### RAG in the rail
+
+- The rail item **RAG Bots** is named **RAG**. Nothing moved: the same tabs (Start, Bots, Questions, Metrics, Checks), the same shortcut.
 
 ### Recently deleted, for more kinds
 
