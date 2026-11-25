@@ -76,6 +76,8 @@ describe('comments for your team', () => {
 
   it('a deleted comment can be put back as it was (Undo), in its place by time', () => {
     const a = addComment(store, test, 'first', 'Ana');
+    // the order is by time: two comments of the same millisecond have no order to restore
+    for (const t = Date.now(); Date.now() === t; );
     const b = addComment(store, test, 'second', 'Bo');
     deleteComment(store, test, a.id);
     expect(listComments(store, test).map((c) => c.id)).toEqual([b.id]);

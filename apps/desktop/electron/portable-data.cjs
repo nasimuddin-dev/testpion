@@ -3,7 +3,8 @@
 // written to the person's profile folder, so the folder can live on a USB stick or a shared drive and be carried along.
 // Without the folder the copy behaves like an installed one. A TESTPION_HOME set by hand wins (it is a choice already).
 const { existsSync, statSync } = require('node:fs');
-const { dirname, join } = require('node:path');
+// Windows paths whatever system reads them (the function answers for Windows only)
+const { dirname, join } = require('node:path').win32;
 
 /** The `data` folder this copy keeps everything in, or undefined when it is not in portable mode. */
 function portableDataDir({ packaged, platform = process.platform, execPath = process.execPath, env = process.env, isDir = defaultIsDir } = {}) {

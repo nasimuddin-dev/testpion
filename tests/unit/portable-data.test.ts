@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = join(__dirname, '../..');
@@ -11,7 +11,7 @@ const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
 
 describe('portable mode: a data folder next to the program', () => {
   const exe = 'D:\\Tools\\TestPion\\TestPion.exe';
-  const data = join('D:\\Tools\\TestPion', 'data');
+  const data = win32.join('D:\\Tools\\TestPion', 'data');
   const has = (dir: string) => (p: string) => p === dir;
 
   it('the unpacked .zip with a data folder keeps everything in it', () => {
@@ -25,7 +25,7 @@ describe('portable mode: a data folder next to the program', () => {
   it('the portable .exe looks next to the file that was started, not in its temporary folder', () => {
     const started = 'E:\\stick';
     const env = { PORTABLE_EXECUTABLE_DIR: started };
-    expect(portableDataDir({ packaged: true, platform: 'win32', execPath: 'C:\\Users\\a\\AppData\\Local\\Temp\\x\\TestPion.exe', env, isDir: has(join(started, 'data')) })).toBe(join(started, 'data'));
+    expect(portableDataDir({ packaged: true, platform: 'win32', execPath: 'C:\\Users\\a\\AppData\\Local\\Temp\\x\\TestPion.exe', env, isDir: has(win32.join(started, 'data')) })).toBe(win32.join(started, 'data'));
   });
 
   it('a TESTPION_HOME set by hand wins, and a run from source or another system is never portable', () => {
