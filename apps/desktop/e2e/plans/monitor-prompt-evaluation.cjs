@@ -20,6 +20,8 @@ const steps = [
      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Monitor on a schedule/.test(m.textContent.trim())), 4000); if (!item) return 'NO MENU ITEM';
      await __t.real.click(item);
      const sel = await __t.waitFor(() => document.querySelector('select[aria-label="Evaluation"]'), 8000); if (!sel) return 'NO EDITOR';
+     // the list of evaluations arrives a moment after the editor: wait for the choice to show
+     await __t.waitFor(() => sel.selectedOptions[0]?.textContent === 'Sample: support intents', 4000);
      const name = document.querySelector('input[placeholder="e.g. API health"]')?.value;
      const out = 'editor opened: true | evaluation picked: ' + (sel.selectedOptions[0]?.textContent === 'Sample: support intents') + ' | name: ' + name;
      // the editor is a new monitor's tab: cancelling closes it
